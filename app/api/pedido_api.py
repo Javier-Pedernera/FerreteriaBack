@@ -1,0 +1,41 @@
+from flask import Blueprint, request, jsonify
+from app.services.pedido_service import PedidoService
+
+pedido_bp = Blueprint("pedido_bp", __name__)
+
+@pedido_bp.route("/", methods=["GET"])
+def listar_pedidos():
+    return jsonify(PedidoService.obtener_pedidos()), 200
+
+@pedido_bp.route("/<int:pedido_id>", methods=["GET"])
+def obtener_pedido(pedido_id):
+    pedido = PedidoService.obtener_pedido_por_id(pedido_id)
+    if not pedido:
+        return jsonify({"error": "Pedido no encontrado"}), 404
+    return jsonify(pedido), 200
+
+@pedido_bp.route("/", methods=["POST"])
+def crear_pedido():
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Datos JSON faltantes o mal formateados"}), 400
+
+    try:
+        nuevo_pedido = PedidoService.crear_pedido(data)
+        return jsonify(nuevo_pedido), 201
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+@pedido_bp.route("/<int:pedido_id>/estado", methods=["PUT"])
+def cambiar_estado(pedido_id):
+    data = request.json
+    nuevo_estado_id = data.get("estado_id")
+    numero_factura = data.get("numero_factura")
+
+    try:
+        pedido_actualizado = PedidoService.actualizar_estado_pedido(pedido_id, nuevo_estado_id, numero_factura)
+        if not pedido_actualizado:
+            return jsonify({"error": "Pedido no encontrado"}), 404
+        return jsonify(pedido_actualizado), 200
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
