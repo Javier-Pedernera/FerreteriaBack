@@ -35,4 +35,6 @@ def create_app():
         initialize_unidades_medida()
         from app.utils.initialize_proveedores import initialize_proveedores
         initialize_proveedores()
+        from app.utils.formasPagoLoader import initialize_formas_pago
+        initialize_formas_pago()
     return app

@@ -9,3 +9,8 @@ from .vendedor import Vendedor
 from .planilla_importacion import PlantillaImportacion
 from .pedido_proveedor import PedidoProveedor
 from .detalle_pedido_proveedor import DetallePedidoProveedor
+from .forma_pago import FormaPago
+from .detalle_venta import DetalleVenta
+from .cliente import Cliente
+from .persona_autorizada import PersonaAutorizada
+from .usuario import Usuario

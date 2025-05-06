@@ -29,6 +29,7 @@ class Producto(db.Model):
     unidad_medida_id = db.Column(db.Integer, db.ForeignKey('unidades_medida.id'), nullable=True)
     marca_id = db.Column(db.Integer, db.ForeignKey('marcas.id'), nullable=True)
     ubicacion_local = db.Column(db.String(50), nullable=True)
+    detalles_venta = db.relationship('DetalleVenta', back_populates='producto', lazy=True)
     
     porcentaje_ganancia_personalizado = db.Column(db.Boolean, default=False)
     
