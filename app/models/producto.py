@@ -73,7 +73,7 @@ class Producto(db.Model):
             'marca_id': self.marca_id,
             'unidad_medida': self.unidad_medida.codigo if self.unidad_medida else None,
             'categoria': self.categoria.nombre if self.categoria else None,
-            'status': self.status.nombre if self.status else None,
+            'status': self.status.label if self.status else None,
             'proveedor': self.proveedor.nombre if self.proveedor else None,
             'marca': self.marca.nombre if self.marca else None,
             'imagenes': [img.serialize() for img in self.imagenes]

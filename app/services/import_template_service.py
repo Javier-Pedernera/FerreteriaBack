@@ -1,3 +1,4 @@
+from sqlalchemy import asc
 from app import db
 from app.models.planilla_importacion import PlantillaImportacion
 from datetime import datetime, timezone
@@ -175,7 +176,7 @@ def import_products_from_excel(plantilla_id, cotizacion_dolar, fecha_lista):
                     categoria_id=categoria.id if categoria else None,
                     status_id=status_out_of_stock.id if status_out_of_stock else None,
                     marca_id=marca.id if marca else None,
-                    cantidad=0,
+                    disponibles=0,
                     porcentaje_ganancia=proveedor.porcentaje_ganancia,
                 )
                 db.session.add(producto)
@@ -200,3 +201,21 @@ def import_products_from_excel(plantilla_id, cotizacion_dolar, fecha_lista):
         "errors": errores
     }
 
+def get_all_import_templates():
+    return PlantillaImportacion.query.order_by(asc(PlantillaImportacion.nombre_archivo_excel)).all()
+
+def get_import_template_by_id(template_id):
+    plantilla = PlantillaImportacion.query.get_or_404(template_id)
+    return plantilla
+
+def update_import_template(template_id, data):
+    plantilla = PlantillaImportacion.query.get_or_404(template_id)
+    for key, value in data.items():
+        setattr(plantilla, key, value)
+    db.session.commit()
+    return plantilla
+
+def delete_import_template(template_id):
+    plantilla = PlantillaImportacion.query.get_or_404(template_id)
+    db.session.delete(plantilla)
+    db.session.commit()

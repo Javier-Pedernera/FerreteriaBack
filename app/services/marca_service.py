@@ -6,9 +6,9 @@ class MarcaService:
     @staticmethod
     def get_all_marcas():
         """
-        Obtiene todas las marcas disponibles.
+        Obtiene todas las marcas disponibles, ordenadas alfabéticamente por nombre.
         """
-        return Marca.query.all()
+        return Marca.query.order_by(Marca.nombre.asc()).all()
 
     @staticmethod
     def get_marca_by_id(marca_id):

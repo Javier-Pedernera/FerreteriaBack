@@ -6,8 +6,30 @@ producto_api = Blueprint('producto_api', __name__)
 
 @producto_api.route('/productos', methods=['GET'])
 def get_productos():
-    productos = ProductoService.obtener_todos()
-    return jsonify([p.serialize() for p in productos]), 200
+    page = int(request.args.get('page', 1))
+    limit = int(request.args.get('limit', 20))
+    query = request.args.get('query', '')
+    categoria_id = request.args.get('categoria_id')
+    proveedor_id = request.args.get('proveedor_id')
+    marca_id = request.args.get('marca_id')
+    status_id = request.args.get('status_id')
+
+    productos, total = ProductoService.buscar_con_filtros(
+        page=page,
+        limit=limit,
+        query=query,
+        categoria_id=categoria_id,
+        proveedor_id=proveedor_id,
+        marca_id=marca_id,
+        status_id=status_id
+    )
+
+    return jsonify({
+        "data": [p.serialize() for p in productos],
+        "page": page,
+        "total_pages": (total + limit - 1) // limit,
+        "total_items": total
+    }), 200
 
 @producto_api.route('/productos/<int:id>', methods=['GET'])
 def get_producto(id):

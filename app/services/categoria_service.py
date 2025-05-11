@@ -5,8 +5,11 @@ class CategoriaService:
 
     @staticmethod
     def get_all_categorias():
-        return Categoria.query.order_by(Categoria.orden.asc()).all()
-
+        """
+        Obtiene todas las categorías disponibles, ordenadas alfabéticamente por nombre.
+        """
+        return Categoria.query.order_by(Categoria.nombre.asc()).all()
+    
     @staticmethod
     def get_categoria_by_id(categoria_id):
         return Categoria.query.get(categoria_id)

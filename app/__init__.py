@@ -3,15 +3,15 @@ from flask_sqlalchemy import SQLAlchemy
 from app.extensions import bcrypt, jwt
 from flask_migrate import Migrate
 import logging
-
-
+from flask_cors import CORS
+from config import Config
 # Inicializamos SQLAlchemy
 db = SQLAlchemy()
 migrate = Migrate()
 def create_app():
     app = Flask(__name__)
     app.config.from_object('config.Config')
-
+    Config.configure_cloudinary()
     # Configurar logging para que se muestren todos los logs de Flask
     logging.basicConfig(level=logging.DEBUG)
     app.logger.setLevel(logging.DEBUG)
@@ -21,6 +21,7 @@ def create_app():
     bcrypt.init_app(app)
     jwt.init_app(app)
     migrate.init_app(app, db)
+    CORS(app, resources={r"*": {"origins": "*"}})
     # Importar y registrar blueprints después de que la app esté configurada
     from .api import register_blueprints
     register_blueprints(app)

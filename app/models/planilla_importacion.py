@@ -29,6 +29,7 @@ class PlantillaImportacion(db.Model):
         return {
             'id': self.id,
             'proveedor_id': self.proveedor_id,
+            'proveedor_nombre': self.proveedor.nombre if self.proveedor else None,
             'nombre_archivo_excel': self.nombre_archivo_excel,
             'nombre_columna_descripcion': self.nombre_columna_descripcion,
             'nombre_columna_codigo': self.nombre_columna_codigo,
