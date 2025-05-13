@@ -28,14 +28,14 @@ def create_app():
 
     with app.app_context():
         db.create_all()
-        # from app.utils.statusLoader import initialize_statuses
-        # initialize_statuses()
-        # from app.utils.categoriaLoader import initialize_categorias
-        # initialize_categorias()
-        # from app.utils.unidadMedidaLoader import initialize_unidades_medida
-        # initialize_unidades_medida()
-        # from app.utils.initialize_proveedores import initialize_proveedores
-        # initialize_proveedores()
-        # from app.utils.formasPagoLoader import initialize_formas_pago
-        # initialize_formas_pago()
+        from app.utils.statusLoader import initialize_statuses
+        initialize_statuses()
+        from app.utils.categoriaLoader import initialize_categorias
+        initialize_categorias()
+        from app.utils.unidadMedidaLoader import initialize_unidades_medida
+        initialize_unidades_medida()
+        from app.utils.initialize_proveedores import initialize_proveedores
+        initialize_proveedores()
+        from app.utils.formasPagoLoader import initialize_formas_pago
+        initialize_formas_pago()
     return app
