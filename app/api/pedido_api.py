@@ -5,7 +5,11 @@ pedido_bp = Blueprint("pedido_bp", __name__)
 
 @pedido_bp.route("/pedidos-proveedores", methods=["GET"])
 def listar_pedidos():
-    return jsonify(PedidoService.get_all_pedidos()), 200
+    page = request.args.get("page", default=1, type=int)
+    limit = request.args.get("limit", default=15, type=int)
+    estado_code = request.args.get("estado", type=str)
+
+    return PedidoService.get_pedidos_paginados(page=page, limit=limit, estado_code=estado_code), 200
 
 @pedido_bp.route("/pedidos-proveedores/<int:pedido_id>", methods=["GET"])
 def obtener_pedido(pedido_id):

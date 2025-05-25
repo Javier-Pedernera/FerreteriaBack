@@ -1,4 +1,6 @@
 from datetime import datetime, timezone
+
+from flask import jsonify
 from app.models.pedido_proveedor import PedidoProveedor
 from app.models.detalle_pedido_proveedor import DetallePedidoProveedor
 from app import db
@@ -7,9 +9,23 @@ from app.models.status import Status
 class PedidoService:
 
     @staticmethod
-    def get_all_pedidos():
-        pedidos = PedidoProveedor.query.order_by(PedidoProveedor.fecha_pedido.desc()).all()
-        return [pedido.serialize() for pedido in pedidos]
+    def get_pedidos_paginados(page=1, limit=15, estado_code=None):
+        query = PedidoProveedor.query
+
+        if estado_code:
+            estado = Status.query.filter_by(code=estado_code).first()
+            if estado:
+                query = query.filter_by(estado_id=estado.id)
+
+        pagination = query.order_by(PedidoProveedor.fecha_pedido.desc()) \
+                        .paginate(page=page, per_page=limit, error_out=False)
+
+        return jsonify({
+            "pedidos": [pedido.serialize() for pedido in pagination.items],
+            "total": pagination.total,
+            "pages": pagination.pages,
+            "page": pagination.page
+        })
 
     @staticmethod
     def get_pedido_by_id(pedido_id):
