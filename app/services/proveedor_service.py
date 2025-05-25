@@ -1,6 +1,7 @@
 from app.models.proveedor import Proveedor
 from app import db
 from app.models.status import Status
+from sqlalchemy import text
 
 class ProveedorService:
 
@@ -34,17 +35,31 @@ class ProveedorService:
             proveedor.precio_con_iva = data.get('precio_con_iva', proveedor.precio_con_iva)
             proveedor.descripcion = data.get('descripcion', proveedor.descripcion)
             proveedor.status_id = data.get('status_id', proveedor.status_id)
-            
-            if proveedor.porcentaje_ganancia != porcentaje_anterior:
-                for producto in proveedor.productos: 
-                    if not producto.porcentaje_ganancia_personalizado:
-                        producto.porcentaje_ganancia = proveedor.porcentaje_ganancia
-                        producto.precio_final = producto.calcular_precio_final()
-                    
+
+            # 🔁 Guardar primero el cambio del proveedor
             db.session.commit()
+
+            # 🔁 Si cambió el porcentaje, hacé el update masivo
+            if proveedor.porcentaje_ganancia != porcentaje_anterior:
+                sql = text("""
+                    UPDATE productos
+                    SET 
+                        porcentaje_ganancia = :porcentaje,
+                        precio_final = ROUND(precio_ars * (1 + :porcentaje / 100), 2)
+                    WHERE 
+                        proveedor_id = :proveedor_id
+                        AND (porcentaje_ganancia_personalizado = false OR porcentaje_ganancia_personalizado IS NULL)
+                """)
+                db.session.execute(sql, {
+                    'porcentaje': proveedor.porcentaje_ganancia,
+                    'proveedor_id': proveedor.id
+                })
+
+                # 🔁 Confirmar el update masivo
+                db.session.commit()
+
             return proveedor
         return None
-
     @staticmethod
     def get_proveedor(id):
         return Proveedor.query.get(id)

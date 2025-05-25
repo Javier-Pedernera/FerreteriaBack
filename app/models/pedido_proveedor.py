@@ -31,10 +31,38 @@ class PedidoProveedor(db.Model):
         return float(total_sin_descuento) - (float(total_sin_descuento) * (float(self.descuento) / 100))
 
     def actualizar_stock(self):
-        if self.estado and self.estado.code == 'received':
-            for detalle in self.detalles:
-                detalle.producto.disponibles += detalle.cantidad
+        print(f"Actualizando stock para pedido ID: {self.id}")
+
+        detalles = self.detalles
+        print(f"Cantidad de detalles en el pedido: {len(detalles)}")
+
+        for detalle in detalles:
+            print(f"Detalle ID: {detalle.id}")
+            print(f" - Producto ID: {detalle.producto_id}")
+            print(f" - Cantidad en detalle: {getattr(detalle, 'cantidad', 'No existe')}")
+            print(f" - Unidades por presentación: {getattr(detalle, 'unidades_por_presentacion', 'No existe')}")
+
+            producto = getattr(detalle, 'producto', None)
+            if not producto:
+                print(" - Producto no cargado o no existe")
+                continue
+
+            print(f" - Producto nombre: {producto.nombre}")
+            print(f" - Stock actual: {producto.disponibles}")
+
+            try:
+                unidades = detalle.cantidad * (detalle.unidades_por_presentacion or 1)
+                print(f" - Calculando unidades a sumar: {detalle.cantidad} * {detalle.unidades_por_presentacion or 1} = {unidades}")
+                producto.disponibles += int(unidades)
+                print(f" - Nuevo stock: {producto.disponibles}")
+            except Exception as e:
+                print(f" - Error calculando stock: {e}")
+
+        try:
             db.session.commit()
+            print("Stock actualizado y guardado en DB.")
+        except Exception as e:
+            print(f"Error al hacer commit en DB: {e}")
 
     def serialize(self):
         return {

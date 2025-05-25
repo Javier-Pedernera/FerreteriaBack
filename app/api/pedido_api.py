@@ -3,18 +3,18 @@ from app.services.pedido_service import PedidoService
 
 pedido_bp = Blueprint("pedido_bp", __name__)
 
-@pedido_bp.route("/", methods=["GET"])
+@pedido_bp.route("/pedidos-proveedores", methods=["GET"])
 def listar_pedidos():
-    return jsonify(PedidoService.obtener_pedidos()), 200
+    return jsonify(PedidoService.get_all_pedidos()), 200
 
-@pedido_bp.route("/<int:pedido_id>", methods=["GET"])
+@pedido_bp.route("/pedidos-proveedores/<int:pedido_id>", methods=["GET"])
 def obtener_pedido(pedido_id):
     pedido = PedidoService.obtener_pedido_por_id(pedido_id)
     if not pedido:
         return jsonify({"error": "Pedido no encontrado"}), 404
     return jsonify(pedido), 200
 
-@pedido_bp.route("/", methods=["POST"])
+@pedido_bp.route("/pedidos-proveedores", methods=["POST"])
 def crear_pedido():
     data = request.get_json()
     if not data:
@@ -26,7 +26,7 @@ def crear_pedido():
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
-@pedido_bp.route("/<int:pedido_id>/estado", methods=["PUT"])
+@pedido_bp.route("/pedidos-proveedores/<int:pedido_id>/estado", methods=["PUT"])
 def cambiar_estado(pedido_id):
     data = request.json
     nuevo_estado_id = data.get("estado_id")

@@ -8,7 +8,8 @@ class PedidoService:
 
     @staticmethod
     def get_all_pedidos():
-        return PedidoProveedor.query.order_by(PedidoProveedor.fecha_pedido.desc()).all()
+        pedidos = PedidoProveedor.query.order_by(PedidoProveedor.fecha_pedido.desc()).all()
+        return [pedido.serialize() for pedido in pedidos]
 
     @staticmethod
     def get_pedido_by_id(pedido_id):
@@ -54,6 +55,7 @@ class PedidoService:
         
         if estado.code == 'received' and pedido.estado.code != 'received':
             pedido.fecha_llegada = datetime.now(timezone.utc)
+            print("Ejecutando actualizar_stock() para pedido:", pedido.id)
             pedido.actualizar_stock()
             
         pedido.estado_id = nuevo_estado_id

@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 import cloudinary
 
 load_dotenv()
-
+# print(os.getenv("DATABASE_URL"))
 class Config:
     SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL")
     SECRET_KEY = os.getenv("SECRET_KEY", "supersecretkey")
