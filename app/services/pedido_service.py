@@ -29,7 +29,8 @@ class PedidoService:
 
     @staticmethod
     def get_pedido_by_id(pedido_id):
-        return PedidoProveedor.query.get(pedido_id)
+        pedido = PedidoProveedor.query.get(pedido_id)
+        return pedido.serialize() if pedido else None
 
     @staticmethod
     def crear_pedido(data):
@@ -37,6 +38,20 @@ class PedidoService:
         if not estado_pending:
             raise ValueError("No se encontró el estado 'pending'")
 
+        # 🔒 Validar si ya hay un pedido pendiente o enviado para este proveedor
+        pedido_existente = PedidoProveedor.query.filter(
+            PedidoProveedor.proveedor_id == data["proveedor_id"],
+            PedidoProveedor.estado.has(Status.code.in_(["pending"]))
+        ).first()
+
+        if pedido_existente:
+            from flask import abort, jsonify
+            return abort(400, description=jsonify({
+                "error": "Ya existe un pedido en curso para este proveedor",
+                "pedido_id": pedido_existente.id
+            }))
+
+        # 🟢 Crear pedido normalmente
         pedido = PedidoProveedor(
             proveedor_id=data["proveedor_id"],
             descuento=data.get("descuento", 0),
@@ -91,3 +106,19 @@ class PedidoService:
             db.session.delete(pedido)
             db.session.commit()
         return pedido
+
+    @staticmethod
+    def obtener_pedido_pendiente_por_proveedor(proveedor_id):
+        estado_pending = Status.query.filter_by(code="pending").first()
+        if not estado_pending:
+            raise ValueError("No se encontró el estado 'pending'")
+
+        pedido = PedidoProveedor.query.filter_by(
+            proveedor_id=proveedor_id,
+            estado_id=estado_pending.id
+        ).first()
+
+        if pedido:
+            return pedido.serialize()
+
+        return None

@@ -66,18 +66,21 @@ class PedidoProveedor(db.Model):
 
     def serialize(self):
         return {
-            "id": self.id,
-            "fecha_pedido": self.fecha_pedido.isoformat(),
-            "proveedor_id": self.proveedor_id,
-            "proveedor": self.proveedor.nombre if self.proveedor else None,
-            "estado_id": self.estado_id,
-            "estado": self.estado.label if self.estado else None,
-            "descuento": str(self.descuento),
-            "total_estimado": round(self.total_estimado, 2),
-            "total_real": round(self.total_real, 2),
-            "total": round(self.total, 2),
-            "fecha_llegada": self.fecha_llegada.isoformat() if self.fecha_llegada else None,
-            "fecha_pago": self.fecha_pago.isoformat() if self.fecha_pago else None,
-            "numero_factura": self.numero_factura,
-            "detalles": [detalle.serialize() for detalle in self.detalles]
-        }
+        "id": self.id,
+        "fecha_pedido": self.fecha_pedido.isoformat(),
+        "proveedor_id": self.proveedor_id,
+        "proveedor": self.proveedor.nombre if self.proveedor else None,
+        "estado_id": self.estado_id,
+        "estado": {
+            "code": self.estado.code if self.estado else None,
+            "label": self.estado.label if self.estado else None,
+        },
+        "descuento": str(self.descuento),
+        "total_estimado": round(self.total_estimado, 2),
+        "total_real": round(self.total_real, 2),
+        "total": round(self.total, 2),
+        "fecha_llegada": self.fecha_llegada.isoformat() if self.fecha_llegada else None,
+        "fecha_pago": self.fecha_pago.isoformat() if self.fecha_pago else None,
+        "numero_factura": self.numero_factura,
+        "detalles": [detalle.serialize() for detalle in self.detalles]
+    }

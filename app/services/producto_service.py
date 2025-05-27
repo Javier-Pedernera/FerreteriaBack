@@ -1,6 +1,7 @@
 from app import db
 from app.models.producto import Producto
 from sqlalchemy import or_
+from app.models.proveedor import Proveedor
 from app.utils.cloudinary_service import CloudinaryService
 
 class ProductoService:
@@ -10,51 +11,63 @@ class ProductoService:
         return Producto.query.all()
 
     @staticmethod
-    def obtener_por_id(producto_id):
-        return Producto.query.get_or_404(producto_id)
-
-    @staticmethod
     def crear(data):
-        # Construir el código interno desde el código del proveedor y un string adicional
-        codigo_proveedor = data['codigo_proveedor']
-        codigo_str = data['codigo_str']
-        cod_interno = f"{codigo_proveedor}-{codigo_str}"
+        proveedor = Proveedor.query.get(data['proveedor_id'])
+        if not proveedor:
+            raise ValueError("Proveedor no encontrado")
+
+        codigo_proveedor = proveedor.codigo_proveedor  # Ej: "LEC"
+
+        # Buscar cuántos productos existen con cod_interno que empiezan con "LEC-new"
+        count = Producto.query.filter(
+            Producto.cod_interno.ilike(f"{codigo_proveedor}-new%")
+        ).count()
+        
+        nuevo_cod_interno = f"{codigo_proveedor}-new{count + 1}"
+
+        porcentaje_ganancia = proveedor.porcentaje_ganancia
+
+        precio_ars = data.get('precio_ars') or 0
 
         producto = Producto(
-            cod_interno=cod_interno,
+            cod_interno=nuevo_cod_interno,
             cod_proveedor=codigo_proveedor,
-            nombre=data['nombre'],
+            nombre=data.get('nombre'),
             nombre_corto=data.get('nombre_corto'),
             descripcion=data.get('descripcion'),
-            precio_ars=data['precio_ars'],
+            precio_ars=precio_ars,
             precio_usd=data.get('precio_usd'),
-            porcentaje_ganancia=data.get('porcentaje_ganancia'),
+            porcentaje_ganancia=porcentaje_ganancia,
             disponibles=data.get('disponibles', 0),
             proveedor_id=data['proveedor_id'],
             categoria_id=data.get('categoria_id'),
-            status_id=data['status_id'],
-            unidad_medida_id=data['unidad_medida_id'],
+            status_id=data.get('status_id'),
+            unidad_medida_id=data.get('unidad_medida_id'),
+            precio_sugerido=data.get('precio_sugerido'),
             marca_id=data.get('marca_id'),
             ubicacion_local=data.get('ubicacion_local')
         )
 
+        # Calcular precio final con los datos ya cargados
         producto.precio_final = producto.calcular_precio_final()
 
         db.session.add(producto)
         db.session.commit()
 
-        # Manejar imágenes base64 si existen
+        # Guardar imágenes
         imagenes_base64 = data.get('imagenes_base64', [])
-        imagen_portada_index = data.get('imagen_portada_index', 0) 
+        imagen_portada_index = data.get('imagen_portada_index', 0)
 
-        for i, base64_imagen in enumerate(imagenes_base64[:3]): 
-            public_id = f"productos/{cod_interno}-{i+1}"
+        for i, base64_imagen in enumerate(imagenes_base64[:3]):
+            public_id = f"productos/{nuevo_cod_interno}-{i+1}"
             es_portada = i == imagen_portada_index
             upload_result = CloudinaryService.subir_imagen(base64_imagen, public_id)
             if upload_result and 'secure_url' in upload_result:
                 CloudinaryService.guardar_url_imagen(producto.id, upload_result['secure_url'], es_portada)
 
         return producto
+
+
 
     @staticmethod
     def actualizar(producto_id, data):
