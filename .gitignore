@@ -118,5 +118,5 @@ __pycache__/
 
 upload_image/
 .env
-
+app/static/uploads/
 static
