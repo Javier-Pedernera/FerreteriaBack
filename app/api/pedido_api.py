@@ -45,7 +45,7 @@ def cambiar_estado(pedido_id):
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
 
-@pedido_bp.route("/pedidos-proveedores/pendiente/<int:proveedor_id>", methods=["GET"])
+@pedido_bp.route("/pedidos_proveedores/pendiente/<int:proveedor_id>", methods=["GET"])
 def pedido_pendiente_proveedor(proveedor_id):
     pedido = PedidoService.obtener_pedido_pendiente_por_proveedor(proveedor_id)
     if pedido is None:
