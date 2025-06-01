@@ -20,6 +20,7 @@ class DetallePedidoProveedor(db.Model):
             "pedido_id": self.pedido_id,
             "producto_id": self.producto_id,
             "producto": self.producto.nombre if self.producto else None,
+            "unidad_medida_id": self.producto.unidad_medida_id if self.producto else None,
             "cod_interno": self.producto.cod_interno if self.producto else None,
             "cantidad": self.cantidad,
             "precio_unitario": str(self.precio_unitario),

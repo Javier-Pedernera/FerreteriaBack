@@ -25,7 +25,7 @@ def register_blueprints(app):
     app.register_blueprint(marca_api, url_prefix='/api')
     app.register_blueprint(import_templates_bp, url_prefix='/api')
     app.register_blueprint(pedido_bp, url_prefix="/api")
-    app.register_blueprint(detalle_pedido_api, url_prefix="/api/pedidos-proveedor/detalle")
+    app.register_blueprint(detalle_pedido_api, url_prefix="/api")
     app.register_blueprint(ventas_api, url_prefix='/api/ventas')
     app.register_blueprint(usuarios_bp, url_prefix='/api/usuarios')
     app.register_blueprint(clientes_bp, url_prefix='/api/clientes')

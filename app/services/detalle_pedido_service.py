@@ -21,7 +21,8 @@ class DetallePedidoService:
             pedido_id=data.get('pedido_id'),
             producto_id=data.get('producto_id'),
             cantidad=data.get('cantidad'),
-            precio_unitario=data.get('precio_unitario')
+            precio_unitario=data.get('precio_unitario'),
+            unidades_por_presentacion=data.get('unidades_por_presentacion')
         )
         db.session.add(nuevo)
         db.session.commit()
@@ -34,6 +35,7 @@ class DetallePedidoService:
             detalle.producto_id = data.get('producto_id', detalle.producto_id)
             detalle.cantidad = data.get('cantidad', detalle.cantidad)
             detalle.precio_unitario = data.get('precio_unitario', detalle.precio_unitario)
+            detalle.unidades_por_presentacion = data.get('unidades_por_presentacion', detalle.unidades_por_presentacion)
             db.session.commit()
         return detalle
 
