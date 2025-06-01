@@ -120,3 +120,6 @@ upload_image/
 .env
 app/static/uploads/
 static
+
+__pycache__/
+*.pyc
