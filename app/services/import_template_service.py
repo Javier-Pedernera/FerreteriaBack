@@ -152,6 +152,11 @@ def import_products_from_excel(plantilla_id, cotizacion_dolar, fecha_lista):
                 if categoria_nombre:
                     categoria = Categoria.query.filter_by(nombre=categoria_nombre).first()
 
+            descripcion = None
+            if plantilla.nombre_columna_descripcion and plantilla.nombre_columna_descripcion in df.columns:
+                descripcion_valor = row.get(plantilla.nombre_columna_descripcion)
+                if not pd.isna(descripcion_valor) and str(descripcion_valor).strip() != "":
+                    descripcion = str(descripcion_valor).strip()
             # status = Status.query.first()
 
             producto_existente = Producto.query.filter_by(cod_interno=f"{codigo_proveedor}-{codigo_str}").first()
@@ -163,6 +168,7 @@ def import_products_from_excel(plantilla_id, cotizacion_dolar, fecha_lista):
                 producto_existente.marca_id = marca.id if marca else None
                 producto_existente.categoria_id = categoria.id if categoria else None
                 producto_existente.nombre = nombre
+                producto_existente.descripcion = descripcion
                 producto_existente.precio_final = producto_existente.calcular_precio_final()
             else:
                 producto = Producto(
@@ -176,6 +182,7 @@ def import_products_from_excel(plantilla_id, cotizacion_dolar, fecha_lista):
                     categoria_id=categoria.id if categoria else None,
                     status_id=status_out_of_stock.id if status_out_of_stock else None,
                     marca_id=marca.id if marca else None,
+                    descripcion=descripcion,
                     disponibles=0,
                     porcentaje_ganancia=proveedor.porcentaje_ganancia,
                 )
