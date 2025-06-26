@@ -13,7 +13,8 @@ class Cliente(db.Model):
     direccion = db.Column(db.String(200), nullable=True)
     creado_en = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     estado_id = db.Column(db.Integer, db.ForeignKey('status.id'), nullable=False)
-
+    cuenta_corriente_activa = db.Column(db.Boolean, default=False)
+    
     estado = db.relationship('Status', lazy=True)
     ventas = db.relationship('Venta', back_populates='cliente', lazy=True)
     personas_autorizadas = db.relationship('PersonaAutorizada', back_populates='cliente', lazy=True)
@@ -29,5 +30,6 @@ class Cliente(db.Model):
             "direccion": self.direccion,
             "creado_en": self.creado_en.isoformat(),
             "estado": self.estado.label if self.estado else None,
-            "personas_autorizadas": [p.serialize() for p in self.personas_autorizadas]
+            "personas_autorizadas": [p.serialize() for p in self.personas_autorizadas],
+            "cuenta_corriente_activa": self.cuenta_corriente_activa,
         }

@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import math
 from app import db
 
 class Producto(db.Model):
@@ -40,11 +41,24 @@ class Producto(db.Model):
     marca = db.relationship('Marca', back_populates='productos', lazy=True)
     imagenes = db.relationship('ImagenProducto', backref='producto', lazy=True)
     detalles = db.relationship('DetallePedidoProveedor', back_populates='producto', lazy=True)
+    presentacion_cantidad = db.Column(db.Float, nullable=True, default=1.0)
+    es_fraccionable = db.Column(db.Boolean, default=False)
     
     def calcular_precio_final(self):
         try:
             porcentaje = self.porcentaje_ganancia if self.porcentaje_ganancia_personalizado else self.proveedor.porcentaje_ganancia
             return round(float(self.precio_ars) * (1 + porcentaje / 100), 2)
+        except Exception:
+            return None
+    
+    def precio_por_unidad(self):
+        try:
+            if self.presentacion_cantidad and self.presentacion_cantidad > 0:
+                valor_real = float(self.precio_final) / self.presentacion_cantidad
+                # Redondear hacia arriba al múltiplo de 5 más cercano
+                redondeado = math.ceil(valor_real / 5) * 5
+                return redondeado
+            return None
         except Exception:
             return None
     
@@ -76,7 +90,10 @@ class Producto(db.Model):
             'status': self.status.label if self.status else None,
             'proveedor': self.proveedor.nombre if self.proveedor else None,
             'marca': self.marca.nombre if self.marca else None,
-            'imagenes': [img.serialize() for img in self.imagenes]
+            'imagenes': [img.serialize() for img in self.imagenes],
+            'presentacion_cantidad': self.presentacion_cantidad,
+            'es_fraccionable': self.es_fraccionable,
+            'precio_por_unidad': str(self.precio_por_unidad()) if self.precio_por_unidad() else None,
         }
 
     def __repr__(self):

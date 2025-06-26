@@ -15,6 +15,8 @@ def initialize_statuses():
         {'code': 'saved', 'label': 'Guardado'},
         {'code': 'delivered', 'label': 'Entregado'},
         {'code': 'on_account', 'label': 'Cuenta corriente'},
+        {'code': 'in_progress', 'label': 'En proceso'},
+        {'code': 'charged', 'label': 'Cobrado'},
         # {'code': 'inactive', 'label': 'Inactivo'},
     ]
 

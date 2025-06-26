@@ -3,6 +3,7 @@ from app.services.ventas_service import VentaService
 
 ventas_api = Blueprint('ventas_api', __name__)
 
+
 @ventas_api.route('/', methods=['POST'])
 def crear():
     data = request.get_json()
@@ -12,6 +13,18 @@ def crear():
     except Exception as e:
         return jsonify({'error': str(e)}), 400
 
+@ventas_api.route('/', methods=['GET'])
+def listar():
+    estado = request.args.get('estado')
+    fecha = request.args.get('fecha')
+    page = int(request.args.get('page', 1))
+
+    try:
+        ventas_data = VentaService.obtener_filtradas(estado, fecha, page)
+        return jsonify(ventas_data)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+    
 @ventas_api.route('/<int:venta_id>', methods=['GET'])
 def obtener(venta_id):
     try:
@@ -20,10 +33,10 @@ def obtener(venta_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 404
 
-@ventas_api.route('/', methods=['GET'])
-def listar():
-    ventas = VentaService.obtener_todas_las_ventas()
-    return jsonify(ventas)
+# @ventas_api.route('/', methods=['GET'])
+# def listar():
+#     ventas = VentaService.obtener_todas_las_ventas()
+#     return jsonify(ventas)
 
 @ventas_api.route('/<int:venta_id>', methods=['PUT'])
 def actualizar(venta_id):
@@ -56,3 +69,11 @@ def pagar_ventas_en_cuenta():
         return jsonify({"ventas_pagadas": ventas_actualizadas}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@ventas_api.route('/tiene-en-proceso/<int:cliente_id>', methods=['GET'])
+def cliente_tiene_en_proceso(cliente_id):
+    try:
+        tiene = VentaService.cliente_tiene_venta_en_proceso(cliente_id)
+        return jsonify({"tiene_en_proceso": tiene})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400

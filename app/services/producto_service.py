@@ -45,7 +45,9 @@ class ProductoService:
             unidad_medida_id=data.get('unidad_medida_id'),
             precio_sugerido=data.get('precio_sugerido'),
             marca_id=data.get('marca_id'),
-            ubicacion_local=data.get('ubicacion_local')
+            ubicacion_local=data.get('ubicacion_local'),
+            presentacion_cantidad=data.get('presentacion_cantidad', 1.0),
+            es_fraccionable=data.get('es_fraccionable', False)
         )
 
         # Calcular precio final con los datos ya cargados
@@ -79,7 +81,8 @@ class ProductoService:
         campos_actualizables = ['cod_proveedor', 'nombre', 'nombre_corto', 'descripcion',
                                 'precio_ars', 'precio_usd', 'precio_sugerido', 'porcentaje_ganancia', 'disponibles',
                                 'proveedor_id', 'categoria_id', 'status_id', 'unidad_medida_id',
-                                'marca_id', 'ubicacion_local', 'porcentaje_ganancia_personalizado']
+                                'marca_id', 'ubicacion_local', 'porcentaje_ganancia_personalizado', 'presentacion_cantidad',
+                                'es_fraccionable']
 
         for campo in campos_actualizables:
             if campo in data:

@@ -1,4 +1,5 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from operator import and_
 from app import db
 from app.models.venta import Venta
 from app.models.detalle_venta import DetalleVenta
@@ -7,13 +8,16 @@ from app.models.status import Status
 class VentaService:
 
     @staticmethod
-    def crear(data):
+    def crear_venta(data):
+        estado_inicial = Status.query.filter_by(code='in_progress').first()
+        if not estado_inicial:
+            raise ValueError("No se encontró el estado 'in_progress'")
         venta = Venta(
             fecha_venta=datetime.now(timezone.utc),
             total=data['total'],
             descuento=data.get('descuento', 0),
             forma_pago_id=data.get('forma_pago_id'),
-            estado_id=data['estado_id'],
+            estado_id=estado_inicial.id,
             vendedor_id=data['vendedor_id'],
             cliente_id=data.get('cliente_id')
         )
@@ -103,3 +107,45 @@ class VentaService:
 
         db.session.commit()
         return resultado
+
+    @staticmethod
+    def obtener_filtradas(estado_code=None, fecha_str=None, page=1, per_page=10):
+        query = Venta.query.join(Status, Venta.estado_id == Status.id)
+
+        if estado_code:
+            estado = Status.query.filter_by(code=estado_code).first()
+            if estado:
+                query = query.filter(Venta.estado_id == estado.id)
+
+        if fecha_str:
+            try:
+                fecha = datetime.strptime(fecha_str, '%Y-%m-%d')
+                fecha_fin = fecha + timedelta(days=1)
+                query = query.filter(and_(
+                    Venta.fecha_venta >= fecha,
+                    Venta.fecha_venta < fecha_fin
+                ))
+            except ValueError:
+                raise ValueError("Formato de fecha inválido. Use YYYY-MM-DD")
+
+        paginado = query.order_by(Venta.fecha_venta.desc()).paginate(page=page, per_page=per_page, error_out=False)
+
+        return {
+            "data": [v.serialize() for v in paginado.items],
+            "total_pages": paginado.pages,
+            "current_page": paginado.page,
+            "total_items": paginado.total
+        }
+    @staticmethod
+    def cliente_tiene_venta_en_proceso(cliente_id: int) -> bool:
+        estado = Status.query.filter(Status.code.ilike('in_progress')).first()
+        if not estado:
+            raise ValueError("Estado 'in_process' no encontrado")
+
+        venta_en_proceso = (
+            db.session.query(Venta)
+            .filter(Venta.cliente_id == cliente_id, Venta.estado_id == estado.id)
+            .first()
+        )
+
+        return venta_en_proceso is not None
