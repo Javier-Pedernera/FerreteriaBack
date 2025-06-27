@@ -13,7 +13,7 @@ class Venta(db.Model):
     pagado = db.Column(db.Numeric, default=0)
     forma_pago_id = db.Column(db.Integer, db.ForeignKey('formas_pago.id'), nullable=True)
     estado_id = db.Column(db.Integer, db.ForeignKey('status.id'), nullable=False)
-
+    observaciones = db.Column(db.Text, nullable=True)
     vendedor_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
     cliente_id = db.Column(db.Integer, db.ForeignKey('clientes.id'), nullable=True)
 

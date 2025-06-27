@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from operator import and_
 from app import db
 from app.models.venta import Venta
@@ -149,3 +150,47 @@ class VentaService:
         )
 
         return venta_en_proceso is not None
+    
+    def actualizar_venta(venta_id: int, data: dict) -> Venta:
+        venta = Venta.query.get_or_404(venta_id)
+
+        # Actualiza campos principales
+        venta.cliente_id = data.get('cliente_id', venta.cliente_id)
+        venta.total = Decimal(data.get('total', venta.total))
+        venta.descuento = Decimal(data.get('descuento', venta.descuento or 0))
+        venta.pagado = Decimal(data.get('pagado', venta.pagado or 0))
+        venta.forma_pago_id = data.get('forma_pago_id', venta.forma_pago_id)
+        venta.estado_id = data.get('estado_id', venta.estado_id)
+        venta.observaciones = data.get('observaciones', getattr(venta, 'observaciones', None))
+
+        # Manejo de detalles
+        nuevos_detalles = data.get('detalles', [])
+        existentes_map = {d.producto_id: d for d in venta.detalles}
+        nuevos_ids = {d['producto_id'] for d in nuevos_detalles}
+
+        # Eliminar detalles que ya no están
+        for producto_id in list(existentes_map):
+            if producto_id not in nuevos_ids:
+                db.session.delete(existentes_map[producto_id])
+
+        # Agregar o actualizar
+        for d in nuevos_detalles:
+            producto_id = d['producto_id']
+            cantidad = int(d['cantidad'])
+            precio_unitario = Decimal(d['precio_unitario'])
+
+            if producto_id in existentes_map:
+                detalle = existentes_map[producto_id]
+                detalle.cantidad = cantidad
+                detalle.precio_unitario = precio_unitario
+            else:
+                nuevo_detalle = DetalleVenta(
+                    venta_id=venta.id,
+                    producto_id=producto_id,
+                    cantidad=cantidad,
+                    precio_unitario=precio_unitario
+                )
+                db.session.add(nuevo_detalle)
+
+        db.session.commit()
+        return venta

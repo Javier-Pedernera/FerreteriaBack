@@ -24,7 +24,8 @@ def crear_cliente():
         email=data.get('email'),
         telefono=data.get('telefono'),
         direccion=data.get('direccion'),
-        estado_id=data['estado_id']
+        estado_id=data['estado_id'],
+        cuenta_corriente_activa=data.get('cuenta_corriente_activa', False)
     )
     db.session.add(cliente)
     db.session.commit()

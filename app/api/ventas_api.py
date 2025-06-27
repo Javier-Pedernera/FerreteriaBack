@@ -38,14 +38,14 @@ def obtener(venta_id):
 #     ventas = VentaService.obtener_todas_las_ventas()
 #     return jsonify(ventas)
 
-@ventas_api.route('/<int:venta_id>', methods=['PUT'])
-def actualizar(venta_id):
-    data = request.get_json()
-    try:
-        venta_actualizada = VentaService.actualizar_venta(venta_id, data)
-        return jsonify(venta_actualizada)
-    except Exception as e:
-        return jsonify({'error': str(e)}), 400
+# @ventas_api.route('/<int:venta_id>', methods=['PUT'])
+# def actualizar(venta_id):
+#     data = request.get_json()
+#     try:
+#         venta_actualizada = VentaService.actualizar_venta(venta_id, data)
+#         return jsonify(venta_actualizada)
+#     except Exception as e:
+#         return jsonify({'error': str(e)}), 400
 
 @ventas_api.route('/<int:venta_id>', methods=['DELETE'])
 def eliminar(venta_id):
@@ -77,3 +77,9 @@ def cliente_tiene_en_proceso(cliente_id):
         return jsonify({"tiene_en_proceso": tiene})
     except Exception as e:
         return jsonify({'error': str(e)}), 400
+    
+@ventas_api.route('/<int:venta_id>', methods=['PUT'])
+def update_venta(venta_id):
+    data = request.json
+    venta_actualizada = VentaService.actualizar_venta(venta_id, data)
+    return jsonify(venta_actualizada.serialize()), 200
