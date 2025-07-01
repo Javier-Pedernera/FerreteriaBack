@@ -28,7 +28,7 @@ def listar():
 @ventas_api.route('/<int:venta_id>', methods=['GET'])
 def obtener(venta_id):
     try:
-        venta = VentaService.obtener_venta(venta_id)
+        venta = VentaService.obtener_por_id(venta_id)
         return jsonify(venta)
     except Exception as e:
         return jsonify({'error': str(e)}), 404
@@ -83,3 +83,18 @@ def update_venta(venta_id):
     data = request.json
     venta_actualizada = VentaService.actualizar_venta(venta_id, data)
     return jsonify(venta_actualizada.serialize()), 200
+
+@ventas_api.route('/<int:venta_id>/cobrar', methods=['PUT'])
+def cobrar_venta(venta_id):
+    data = request.get_json()
+    forma_pago_id = data.get('forma_pago_id')
+    monto_abonado = data.get('monto_abonado')
+    persona_autorizada_id = data.get('persona_autorizada_id')
+    if not forma_pago_id or monto_abonado is None:
+        return jsonify({"error": "forma_pago_id y monto_abonado son requeridos"}), 400
+
+    try:
+        venta_cobrada = VentaService.cobrar_venta(venta_id, forma_pago_id, float(monto_abonado),persona_autorizada_id)
+        return jsonify(venta_cobrada), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400

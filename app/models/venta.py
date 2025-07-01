@@ -16,7 +16,10 @@ class Venta(db.Model):
     observaciones = db.Column(db.Text, nullable=True)
     vendedor_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
     cliente_id = db.Column(db.Integer, db.ForeignKey('clientes.id'), nullable=True)
-
+    
+    persona_autorizada_id = db.Column(db.Integer, db.ForeignKey('personas_autorizadas.id'), nullable=True)
+    persona_autorizada = db.relationship('PersonaAutorizada', lazy=True)
+    
     vendedor = db.relationship('Usuario', back_populates='ventas', lazy=True)
     cliente = db.relationship('Cliente', back_populates='ventas', lazy=True)
     forma_pago = db.relationship('FormaPago', lazy=True)
@@ -35,6 +38,7 @@ class Venta(db.Model):
             "forma_pago": self.forma_pago.nombre if self.forma_pago else None,
             "estado": self.estado.label if self.estado else None,
             "vendedor": self.vendedor.nombre if self.vendedor else None,
-            "cliente": self.cliente.nombre if self.cliente else None,
-            "detalles": [detalle.serialize() for detalle in self.detalles]
+            "cliente": self.cliente.serialize() if self.cliente else None,
+            "detalles": [detalle.serialize() for detalle in self.detalles],
+            "persona_autorizada": self.persona_autorizada.serialize() if self.persona_autorizada else None
         }

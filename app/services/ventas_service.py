@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from operator import and_
 from app import db
+from app.models.forma_pago import FormaPago
 from app.models.venta import Venta
 from app.models.detalle_venta import DetalleVenta
 from app.models.status import Status
@@ -194,3 +195,40 @@ class VentaService:
 
         db.session.commit()
         return venta
+    
+    @staticmethod
+    def cobrar_venta(venta_id, forma_pago_id, monto_abonado, persona_autorizada_id=None):
+        venta = Venta.query.get_or_404(venta_id)
+        forma_pago = FormaPago.query.get_or_404(forma_pago_id)
+
+        if not forma_pago:
+            raise Exception("Forma de pago no válida")
+
+        if forma_pago.nombre.lower() == 'cuenta corriente':
+            # En cuenta corriente, no se paga en el momento
+            venta.pagado = 0
+            venta.fecha_pago = None
+            estado_code = 'on_account'
+        else:
+            # Validar que pagó al menos el total
+            if monto_abonado < float(venta.total):
+                raise Exception("El monto abonado no cubre el total de la venta")
+
+            venta.pagado = monto_abonado
+            venta.fecha_pago = datetime.now(timezone.utc)
+            estado_code = 'charged'
+
+        venta.forma_pago_id = forma_pago_id
+
+        # 🔸 Asignar persona autorizada si fue pasada
+        if persona_autorizada_id:
+            venta.persona_autorizada_id = persona_autorizada_id
+
+        nuevo_estado = Status.query.filter_by(code=estado_code).first()
+        if not nuevo_estado:
+            raise Exception(f"Estado '{estado_code}' no encontrado")
+
+        venta.estado_id = nuevo_estado.id
+
+        db.session.commit()
+        return venta.serialize()
