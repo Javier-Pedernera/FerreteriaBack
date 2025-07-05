@@ -12,7 +12,7 @@ from .detalle_pedido_api import detalle_pedido_api
 from .ventas_api import ventas_api
 from .clientes_api import clientes_bp
 from .formas_pago_api import formas_pago_bp
-from .personas_autorizadas_api import personas_bp
+from .personas_autorizadas_api import personas_api
 from .usuarios_api import usuarios_bp
 from .status_api import status_api
 
@@ -30,7 +30,7 @@ def register_blueprints(app):
     app.register_blueprint(usuarios_bp, url_prefix='/api/usuarios')
     app.register_blueprint(clientes_bp, url_prefix='/api/clientes')
     app.register_blueprint(formas_pago_bp, url_prefix='/api/formas-pago')
-    app.register_blueprint(personas_bp, url_prefix='/api/personas')
+    app.register_blueprint(personas_api, url_prefix='/api/personas-autorizadas')
     app.register_blueprint(status_api, url_prefix='/api')
     # app.register_blueprint(auth_api, url_prefix='/api')
     # app.register_blueprint(status_api, url_prefix='/api')

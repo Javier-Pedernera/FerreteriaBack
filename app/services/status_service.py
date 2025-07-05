@@ -41,3 +41,7 @@ class StatusService:
         db.session.delete(status)
         db.session.commit()
         return status
+    
+    @staticmethod
+    def get_status_by_code(code): 
+        return Status.query.filter_by(code=code).first()
