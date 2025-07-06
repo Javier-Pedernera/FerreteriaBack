@@ -47,16 +47,20 @@ class Producto(db.Model):
     def calcular_precio_final(self):
         try:
             porcentaje = self.porcentaje_ganancia if self.porcentaje_ganancia_personalizado else self.proveedor.porcentaje_ganancia
-            return round(float(self.precio_ars) * (1 + porcentaje / 100), 2)
-        except Exception:
-            return None
-    
-    def calcular_precio_final(self):
-        try:
-            porcentaje = self.porcentaje_ganancia if self.porcentaje_ganancia_personalizado else self.proveedor.porcentaje_ganancia
             base = float(self.precio_ars) * (1 + porcentaje / 100)
             redondeado = math.ceil(base / 5) * 5  # Redondea hacia arriba al múltiplo de 5
             return redondeado
+        except Exception:
+            return None
+    
+    def precio_por_unidad(self):
+        try:
+            if self.presentacion_cantidad and self.presentacion_cantidad > 0:
+                valor_real = float(self.precio_final) / self.presentacion_cantidad
+                # Redondear hacia arriba al múltiplo de 5 más cercano
+                redondeado = math.ceil(valor_real / 5) * 5
+                return redondeado
+            return None
         except Exception:
             return None
     

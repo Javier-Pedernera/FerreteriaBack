@@ -186,9 +186,9 @@ def import_products_from_excel(plantilla_id, cotizacion_dolar, fecha_lista):
                     disponibles=0,
                     porcentaje_ganancia=proveedor.porcentaje_ganancia,
                 )
+                producto.precio_final = producto.calcular_precio_final()
                 db.session.add(producto)
                 db.session.flush()
-                producto.precio_final = producto.calcular_precio_final()
 
             productos_importados += 1
         except Exception as e:
