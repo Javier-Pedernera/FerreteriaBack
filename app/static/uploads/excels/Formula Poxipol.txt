@@ -1,4 +1,0 @@
--ir al Excel
--seleccionar la columna a separar
--en Datos elegir texto en columna.
-- delimitado por ancho fijo ya que el código tiene el mismo ancho en todos
