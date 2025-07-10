@@ -55,11 +55,14 @@ class Producto(db.Model):
     
     def precio_por_unidad(self):
         try:
+            if not self.es_fraccionable:
+                return float(self.precio_final) if self.precio_final else None
+            
             if self.presentacion_cantidad and self.presentacion_cantidad > 0:
                 valor_real = float(self.precio_final) / self.presentacion_cantidad
-                # Redondear hacia arriba al múltiplo de 5 más cercano
                 redondeado = math.ceil(valor_real / 5) * 5
                 return redondeado
+
             return None
         except Exception:
             return None

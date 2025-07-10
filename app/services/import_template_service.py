@@ -10,24 +10,33 @@ from app.models.marca import Marca
 from app.models.status import Status
 from sqlalchemy.exc import SQLAlchemyError
 
+from app.models.unidad_medida import UnidadMedida
+
 def create_import_template(data):
     nueva_plantilla = PlantillaImportacion(
         proveedor_id=data['proveedor_id'],
         nombre_archivo_excel=data['nombre_archivo_excel'],
         nombre_columna_codigo=data['nombre_columna_codigo'],
         nombre_columna_precio=data['nombre_columna_precio'],
-        nombre_columna_nombre=data['nombre_columna_nombre'],
+        nombre_columna_nombre=data.get('nombre_columna_nombre'),
         nombre_columna_precio_sugerido=data.get('nombre_columna_precio_sugerido'),
         nombre_columna_descripcion=data.get('nombre_columna_descripcion'),
         nombre_columna_marca=data.get('nombre_columna_marca'),
         nombre_columna_categoria=data.get('nombre_columna_categoria'),
+        nombre_columna_nombre_corto=data.get('nombre_columna_nombre_corto'),
+        nombre_columna_ubicacion=data.get('nombre_columna_ubicacion'),
+        nombre_columna_unidad_medida=data.get('nombre_columna_unidad_medida'),
+        nombre_columna_presentacion=data.get('nombre_columna_presentacion'),
+        nombre_columna_es_fraccionable=data.get('nombre_columna_es_fraccionable'),
+        nombre_columna_porcentaje_ganancia=data.get('nombre_columna_porcentaje_ganancia'),
+        nombre_columna_pg_personalizado=data.get('nombre_columna_pg_personalizado'),
         fila_inicio=data.get('fila_inicio', 2),
         delimitador_decimal=data.get('delimitador_decimal', '.'),
         usa_simbolo_pesos=data.get('usa_simbolo_pesos', True),
         usa_miles_con_punto=data.get('usa_miles_con_punto', True),
+        cod_solo_numero=data.get('cod_solo_numero', False),
         fecha_creacion=datetime.now(timezone.utc),
         fecha_actualizacion=datetime.now(timezone.utc),
-        cod_solo_numero=data.get('cod_solo_numero', False),
     )
     db.session.add(nueva_plantilla)
     db.session.commit()
@@ -44,7 +53,7 @@ def import_products_from_excel(plantilla_id, cotizacion_dolar, fecha_lista):
         fecha_lista_dt = datetime.fromisoformat(fecha_lista)
     except ValueError:
         return {"error": "Formato de fecha inválido. Use YYYY-MM-DD o ISO completo."}
-    
+
     plantilla = PlantillaImportacion.query.get(plantilla_id)
     if not plantilla:
         return {"error": "No se encontró la plantilla con ese ID."}
@@ -63,7 +72,7 @@ def import_products_from_excel(plantilla_id, cotizacion_dolar, fecha_lista):
             df = pd.read_excel(ruta_excel, engine='xlrd', skiprows=plantilla.fila_inicio - 1, dtype=dtype)
         else:
             df = pd.read_excel(ruta_excel, engine='openpyxl', skiprows=plantilla.fila_inicio - 1, dtype=dtype)
-        df.columns = df.columns.str.strip()    
+        df.columns = df.columns.str.strip()
     except Exception as e:
         return {"error": f"Error al cargar el archivo Excel: {str(e)}"}
 
@@ -75,12 +84,12 @@ def import_products_from_excel(plantilla_id, cotizacion_dolar, fecha_lista):
 
     nombre_proveedor = proveedor.nombre.strip().lower().replace(" ", "")
     nombre_archivo_simple = nombre_archivo.strip().lower().replace(" ", "")
-    
+
     if nombre_proveedor not in nombre_archivo_simple:
         return {
             "error": f"El nombre del archivo '{nombre_archivo}' no parece corresponder al proveedor '{proveedor.nombre}'. Verifique que esté usando el archivo correcto."
         }
-        
+
     codigo_proveedor = proveedor.codigo_proveedor
     productos_importados = 0
     errores = []
@@ -90,18 +99,16 @@ def import_products_from_excel(plantilla_id, cotizacion_dolar, fecha_lista):
             col_codigo = plantilla.nombre_columna_codigo
             if col_codigo not in df.columns:
                 return {"error": f"La columna '{col_codigo}' no existe en el archivo Excel."}
-            
+
             codigo_producto = row[col_codigo]
-            # verifica si el codigo no esta vacia la celda
             if pd.isna(codigo_producto) or str(codigo_producto).strip() == "":
                 continue
             codigo_str = str(codigo_producto).strip()
-            # verifica si son solo numeros si tiene solo numero en true
             if plantilla.cod_solo_numero and not codigo_str.isdigit():
                 continue
             if codigo_str.isdigit():
                 codigo_str = str(int(codigo_str))
-                
+
             precio_ars = row[plantilla.nombre_columna_precio]
             if pd.isna(precio_ars):
                 continue
@@ -118,7 +125,6 @@ def import_products_from_excel(plantilla_id, cotizacion_dolar, fecha_lista):
             except ValueError:
                 continue
 
-            # ✅ Calcular precio en dólares
             precio_usd = round(precio_ars / cotizacion_dolar, 2)
 
             nombre = None
@@ -127,11 +133,11 @@ def import_products_from_excel(plantilla_id, cotizacion_dolar, fecha_lista):
                 if pd.isna(nombre) or str(nombre).strip() == "":
                     nombre = None
 
-            # Si no hay nombre, usar descripción si existe
             if not nombre:
                 nombre = row.get(plantilla.nombre_columna_descripcion, "")
                 if pd.isna(nombre) or str(nombre).strip() == "":
                     nombre = None
+
             precio_sugerido = row.get(plantilla.nombre_columna_precio_sugerido) if plantilla.nombre_columna_precio_sugerido else None
 
             marca = None
@@ -157,26 +163,83 @@ def import_products_from_excel(plantilla_id, cotizacion_dolar, fecha_lista):
                 descripcion_valor = row.get(plantilla.nombre_columna_descripcion)
                 if not pd.isna(descripcion_valor) and str(descripcion_valor).strip() != "":
                     descripcion = str(descripcion_valor).strip()
-            # status = Status.query.first()
+
+            # Campos nuevos
+            nombre_corto = None
+            if plantilla.nombre_columna_nombre_corto and plantilla.nombre_columna_nombre_corto in df.columns:
+                nombre_corto = row.get(plantilla.nombre_columna_nombre_corto)
+                if pd.isna(nombre_corto) or str(nombre_corto).strip() == "":
+                    nombre_corto = None
+
+            ubicacion_local = None
+            if plantilla.nombre_columna_ubicacion and plantilla.nombre_columna_ubicacion in df.columns:
+                ubicacion_local = row.get(plantilla.nombre_columna_ubicacion)
+                if pd.isna(ubicacion_local) or str(ubicacion_local).strip() == "":
+                    ubicacion_local = None
+
+            unidad_medida_id = None
+            if plantilla.nombre_columna_unidad_medida and plantilla.nombre_columna_unidad_medida in df.columns:
+                unidad_nombre = row.get(plantilla.nombre_columna_unidad_medida)
+                if not pd.isna(unidad_nombre) and str(unidad_nombre).strip():
+                    unidad = UnidadMedida.query.filter_by(codigo=str(unidad_nombre).strip()).first()
+                    print(unidad)
+                    if unidad:
+                        unidad_medida_id = unidad.id
+
+            presentacion_cantidad = None
+            if plantilla.nombre_columna_presentacion and plantilla.nombre_columna_presentacion in df.columns:
+                valor = row.get(plantilla.nombre_columna_presentacion)
+                if not pd.isna(valor):
+                    try:
+                        presentacion_cantidad = float(str(valor).replace(",", "."))
+                    except ValueError:
+                        presentacion_cantidad = None
+
+            es_fraccionable = False
+            if plantilla.nombre_columna_es_fraccionable and plantilla.nombre_columna_es_fraccionable in df.columns:
+                val = row.get(plantilla.nombre_columna_es_fraccionable)
+                es_fraccionable = str(val).strip().lower() in ["1", "sí", "si", "true"]
+
+            porcentaje_ganancia = proveedor.porcentaje_ganancia
+            if plantilla.nombre_columna_porcentaje_ganancia and plantilla.nombre_columna_porcentaje_ganancia in df.columns:
+                raw = row.get(plantilla.nombre_columna_porcentaje_ganancia)
+                if not pd.isna(raw):
+                    try:
+                        porcentaje_ganancia = float(str(raw).replace(",", "."))
+                    except ValueError:
+                        porcentaje_ganancia = proveedor.porcentaje_ganancia
+
+            porcentaje_ganancia_personalizado = False
+            if plantilla.nombre_columna_pg_personalizado and plantilla.nombre_columna_pg_personalizado in df.columns:
+                val = row.get(plantilla.nombre_columna_pg_personalizado)
+                porcentaje_ganancia_personalizado = str(val).strip().lower() in ["1", "sí", "si", "true"]
 
             producto_existente = Producto.query.filter_by(cod_interno=f"{codigo_proveedor}-{codigo_str}").first()
-            
+
             if producto_existente:
                 producto_existente.precio_ars = precio_ars
-                producto_existente.precio_usd = precio_usd  # ✅ nuevo campo
+                producto_existente.precio_usd = precio_usd
                 producto_existente.precio_sugerido = precio_sugerido
                 producto_existente.marca_id = marca.id if marca else None
                 producto_existente.categoria_id = categoria.id if categoria else None
                 producto_existente.nombre = nombre
                 producto_existente.descripcion = descripcion
+                producto_existente.nombre_corto = nombre_corto
+                producto_existente.ubicacion_local = ubicacion_local
+                producto_existente.unidad_medida_id = unidad_medida_id
+                producto_existente.presentacion_cantidad = presentacion_cantidad
+                producto_existente.es_fraccionable = es_fraccionable
+                producto_existente.porcentaje_ganancia = porcentaje_ganancia
+                producto_existente.porcentaje_ganancia_personalizado = porcentaje_ganancia_personalizado
                 producto_existente.precio_final = producto_existente.calcular_precio_final()
             else:
                 producto = Producto(
                     cod_interno=f"{codigo_proveedor}-{codigo_str}",
                     cod_proveedor=codigo_proveedor,
                     nombre=nombre,
+                    nombre_corto=nombre_corto,
                     precio_ars=precio_ars,
-                    precio_usd=precio_usd, 
+                    precio_usd=precio_usd,
                     precio_sugerido=precio_sugerido,
                     proveedor_id=proveedor.id,
                     categoria_id=categoria.id if categoria else None,
@@ -184,7 +247,12 @@ def import_products_from_excel(plantilla_id, cotizacion_dolar, fecha_lista):
                     marca_id=marca.id if marca else None,
                     descripcion=descripcion,
                     disponibles=0,
-                    porcentaje_ganancia=proveedor.porcentaje_ganancia,
+                    ubicacion_local=ubicacion_local,
+                    unidad_medida_id=unidad_medida_id,
+                    presentacion_cantidad=presentacion_cantidad,
+                    es_fraccionable=es_fraccionable,
+                    porcentaje_ganancia=porcentaje_ganancia,
+                    porcentaje_ganancia_personalizado=porcentaje_ganancia_personalizado,
                 )
                 producto.precio_final = producto.calcular_precio_final()
                 db.session.add(producto)
@@ -207,6 +275,7 @@ def import_products_from_excel(plantilla_id, cotizacion_dolar, fecha_lista):
         "processed_count": productos_importados,
         "errors": errores
     }
+
 
 def get_all_import_templates():
     return PlantillaImportacion.query.order_by(asc(PlantillaImportacion.nombre_archivo_excel)).all()
