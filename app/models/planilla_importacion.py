@@ -23,6 +23,13 @@ class PlantillaImportacion(db.Model):
     fecha_actualizacion = db.Column(db.DateTime, default=datetime.now(timezone.utc), onupdate=datetime.now(timezone.utc))
     cod_solo_numero = db.Column(db.Boolean, default=False)
     
+    nombre_columna_nombre_corto = db.Column(db.String, nullable=True)
+    nombre_columna_ubicacion = db.Column(db.String, nullable=True)
+    nombre_columna_unidad_medida = db.Column(db.String, nullable=True)
+    nombre_columna_presentacion = db.Column(db.String, nullable=True)
+    nombre_columna_es_fraccionable = db.Column(db.String, nullable=True)
+    nombre_columna_porcentaje_ganancia = db.Column(db.String, nullable=True)
+    nombre_columna_pg_personalizado = db.Column(db.String, nullable=True)
     proveedor = db.relationship('Proveedor', backref='plantillas_importacion', lazy=True)
 
     def serialize(self):
@@ -31,13 +38,20 @@ class PlantillaImportacion(db.Model):
             'proveedor_id': self.proveedor_id,
             'proveedor_nombre': self.proveedor.nombre if self.proveedor else None,
             'nombre_archivo_excel': self.nombre_archivo_excel,
-            'nombre_columna_descripcion': self.nombre_columna_descripcion,
             'nombre_columna_codigo': self.nombre_columna_codigo,
             'nombre_columna_precio': self.nombre_columna_precio,
             'nombre_columna_precio_sugerido': self.nombre_columna_precio_sugerido,
             'nombre_columna_nombre': self.nombre_columna_nombre,
+            'nombre_columna_descripcion': self.nombre_columna_descripcion,
             'nombre_columna_marca': self.nombre_columna_marca,
             'nombre_columna_categoria': self.nombre_columna_categoria,
+            'nombre_columna_nombre_corto': self.nombre_columna_nombre_corto,
+            'nombre_columna_ubicacion': self.nombre_columna_ubicacion,
+            'nombre_columna_unidad_medida': self.nombre_columna_unidad_medida,
+            'nombre_columna_presentacion': self.nombre_columna_presentacion,
+            'nombre_columna_es_fraccionable': self.nombre_columna_es_fraccionable,
+            'nombre_columna_porcentaje_ganancia': self.nombre_columna_porcentaje_ganancia,
+            'nombre_columna_pg_personalizado': self.nombre_columna_pg_personalizado,
             'fila_inicio': self.fila_inicio,
             'delimitador_decimal': self.delimitador_decimal,
             'usa_simbolo_pesos': self.usa_simbolo_pesos,

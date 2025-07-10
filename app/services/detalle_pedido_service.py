@@ -1,5 +1,6 @@
 from app.models.detalle_pedido_proveedor import DetallePedidoProveedor
 from app import db
+from app.models.producto import Producto
 
 class DetallePedidoService:
 
@@ -36,6 +37,12 @@ class DetallePedidoService:
             detalle.cantidad = data.get('cantidad', detalle.cantidad)
             detalle.precio_unitario = data.get('precio_unitario', detalle.precio_unitario)
             detalle.unidades_por_presentacion = data.get('unidades_por_presentacion', detalle.unidades_por_presentacion)
+            
+             # ACTUALIZAR unidad de medida del producto
+            producto = Producto.query.get(detalle.producto_id)
+            if producto and 'unidad_medida_id' in data:
+                producto.unidad_medida_id = data['unidad_medida_id']
+            
             db.session.commit()
         return detalle
 
