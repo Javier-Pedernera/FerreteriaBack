@@ -231,6 +231,9 @@ def import_products_from_excel(plantilla_id, cotizacion_dolar, fecha_lista):
                 producto_existente.es_fraccionable = es_fraccionable
                 producto_existente.porcentaje_ganancia = porcentaje_ganancia
                 producto_existente.porcentaje_ganancia_personalizado = porcentaje_ganancia_personalizado
+                db.session.flush()
+                db.session.refresh(producto_existente)
+
                 producto_existente.precio_final = producto_existente.calcular_precio_final()
             else:
                 producto = Producto(
