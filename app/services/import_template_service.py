@@ -126,7 +126,7 @@ def import_products_from_excel(plantilla_id, cotizacion_dolar, fecha_lista):
                 continue
 
             # 🔹 APLICAR IVA SI ES NECESARIO
-            if not plantilla.precio_con_iva:
+            if not proveedor.precio_con_iva:
                 precio_ars = round(precio_ars * 1.21, 2)
 
             precio_usd = round(precio_ars / cotizacion_dolar, 2)
@@ -261,10 +261,10 @@ def import_products_from_excel(plantilla_id, cotizacion_dolar, fecha_lista):
                     porcentaje_ganancia=porcentaje_ganancia,
                     porcentaje_ganancia_personalizado=porcentaje_ganancia_personalizado,
                 )
-                producto.precio_final = producto.calcular_precio_final()
+                # producto.precio_final = producto.calcular_precio_final()
                 db.session.add(producto)
                 db.session.flush()
-
+                producto.precio_final = producto.calcular_precio_final()
             productos_importados += 1
         except Exception as e:
             print(f"Error en fila {index + plantilla.fila_inicio}: {str(e)}")
