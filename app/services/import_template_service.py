@@ -125,8 +125,12 @@ def import_products_from_excel(plantilla_id, cotizacion_dolar, fecha_lista):
             except ValueError:
                 continue
 
-            precio_usd = round(precio_ars / cotizacion_dolar, 2)
+            # 🔹 APLICAR IVA SI ES NECESARIO
+            if not plantilla.precio_con_iva:
+                precio_ars = round(precio_ars * 1.21, 2)
 
+            precio_usd = round(precio_ars / cotizacion_dolar, 2)
+            
             nombre = None
             if plantilla.nombre_columna_nombre and plantilla.nombre_columna_nombre in df.columns:
                 nombre = row.get(plantilla.nombre_columna_nombre)
