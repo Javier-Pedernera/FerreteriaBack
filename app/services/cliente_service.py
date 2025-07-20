@@ -7,7 +7,7 @@ class ClienteService:
 
     @staticmethod
     def get_all_clientes():
-        return Cliente.query.all()
+        return Cliente.query.order_by(Cliente.nombre.asc()).all()
 
     @staticmethod
     def get_cliente_by_id(cliente_id):

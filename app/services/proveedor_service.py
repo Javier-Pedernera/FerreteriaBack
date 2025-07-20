@@ -66,7 +66,7 @@ class ProveedorService:
 
     @staticmethod
     def get_all_proveedores():
-        return Proveedor.query.all()
+        return Proveedor.query.order_by(Proveedor.nombre.asc()).all()
 
     @staticmethod
     def delete_proveedor(id):
