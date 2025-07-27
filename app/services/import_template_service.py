@@ -159,8 +159,10 @@ def import_products_from_excel(plantilla_id, cotizacion_dolar, fecha_lista):
             categoria = None
             if plantilla.nombre_columna_categoria:
                 categoria_nombre = row.get(plantilla.nombre_columna_categoria)
-                if categoria_nombre:
-                    categoria = Categoria.query.filter_by(nombre=categoria_nombre).first()
+
+                # Ignorar si viene NaN, None o vacío
+                if categoria_nombre and str(categoria_nombre).strip().lower() != 'nan':
+                    categoria = Categoria.query.filter_by(nombre=str(categoria_nombre).strip()).first()
 
             descripcion = None
             if plantilla.nombre_columna_descripcion and plantilla.nombre_columna_descripcion in df.columns:
@@ -186,14 +188,14 @@ def import_products_from_excel(plantilla_id, cotizacion_dolar, fecha_lista):
                 unidad_nombre = row.get(plantilla.nombre_columna_unidad_medida)
                 if not pd.isna(unidad_nombre) and str(unidad_nombre).strip():
                     unidad = UnidadMedida.query.filter_by(codigo=str(unidad_nombre).strip()).first()
-                    print(unidad)
+                    # print(unidad)
                     if unidad:
                         unidad_medida_id = unidad.id
 
             presentacion_cantidad = None
             if plantilla.nombre_columna_presentacion and plantilla.nombre_columna_presentacion in df.columns:
                 valor = row.get(plantilla.nombre_columna_presentacion)
-                if not pd.isna(valor):
+                if valor is not None and str(valor).strip().lower() != "nan":
                     try:
                         presentacion_cantidad = float(str(valor).replace(",", "."))
                     except ValueError:
@@ -202,12 +204,13 @@ def import_products_from_excel(plantilla_id, cotizacion_dolar, fecha_lista):
             es_fraccionable = False
             if plantilla.nombre_columna_es_fraccionable and plantilla.nombre_columna_es_fraccionable in df.columns:
                 val = row.get(plantilla.nombre_columna_es_fraccionable)
-                es_fraccionable = str(val).strip().lower() in ["1", "sí", "si", "true"]
+                if val is not None and str(val).strip().lower() != "nan":
+                    es_fraccionable = str(val).strip().lower() in ["1", "sí", "si", "true"]
 
             porcentaje_ganancia = proveedor.porcentaje_ganancia
             if plantilla.nombre_columna_porcentaje_ganancia and plantilla.nombre_columna_porcentaje_ganancia in df.columns:
                 raw = row.get(plantilla.nombre_columna_porcentaje_ganancia)
-                if not pd.isna(raw):
+                if raw is not None and str(raw).strip().lower() != "nan":
                     try:
                         porcentaje_ganancia = float(str(raw).replace(",", "."))
                     except ValueError:
@@ -216,8 +219,8 @@ def import_products_from_excel(plantilla_id, cotizacion_dolar, fecha_lista):
             porcentaje_ganancia_personalizado = False
             if plantilla.nombre_columna_pg_personalizado and plantilla.nombre_columna_pg_personalizado in df.columns:
                 val = row.get(plantilla.nombre_columna_pg_personalizado)
-                porcentaje_ganancia_personalizado = str(val).strip().lower() in ["1", "sí", "si", "true"]
-
+                if val is not None and str(val).strip().lower() != "nan":
+                    porcentaje_ganancia_personalizado = str(val).strip().lower() in ["1", "sí", "si", "true"]
             producto_existente = Producto.query.filter_by(cod_interno=f"{codigo_proveedor}-{codigo_str}").first()
 
             if producto_existente:
