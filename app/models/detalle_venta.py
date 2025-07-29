@@ -19,6 +19,9 @@ class DetalleVenta(db.Model):
             "producto": self.producto.nombre if self.producto else None,
             "cod_interno": self.producto.cod_interno if self.producto else None,
             "precio_costo": self.producto.precio_final if self.producto else None,
+            "presentacion": self.producto.presentacion_cantidad if self.producto else None,
+            "unidad_medida": self.producto.unidad_medida if self.producto else None,
+            "disponibles": self.producto.disponibles if self.producto else None,
             "cantidad": self.cantidad,
             "precio_unitario": str(self.precio_unitario),
             "subtotal": str(self.cantidad * self.precio_unitario)
