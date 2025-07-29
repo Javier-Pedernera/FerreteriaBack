@@ -14,16 +14,18 @@ class DetalleVenta(db.Model):
     producto = db.relationship('Producto', back_populates='detalles_venta', lazy=True)
 
     def serialize(self):
+        producto = self.producto
+        print(producto)
         return {
-            "producto_id": self.producto_id,
-            "producto": self.producto.nombre if self.producto else None,
-            "cod_interno": self.producto.cod_interno if self.producto else None,
-            "precio_costo": self.producto.precio_final if self.producto else None,
-            "presentacion": self.producto.presentacion_cantidad if self.producto else None,
-            "unidad_medida": self.producto.unidad_medida if self.producto else None,
-            "disponibles": self.producto.disponibles if self.producto else None,
-            "cantidad": self.cantidad,
-            "precio_unitario": str(self.precio_unitario),
-            "subtotal": str(self.cantidad * self.precio_unitario)
-        }
+        "producto_id": self.producto_id,
+        "producto": getattr(producto, "nombre", None),
+        "cod_interno": getattr(producto, "cod_interno", None),
+        "precio_costo": getattr(producto, "precio_ars", None),
+        "presentacion_cantidad": getattr(producto, "presentacion_cantidad", None),
+        "unidad_medida": getattr(producto, "unidad_medida.codigo", None) if producto and producto.unidad_medida else None,
+        "disponibles": getattr(producto, "disponibles", None),
+        "cantidad": self.cantidad,
+        "precio_unitario": str(self.precio_unitario),
+        "subtotal": str(self.cantidad * self.precio_unitario)
+    }
 # git commit -m "agrego el codigo interno al detalle" 
