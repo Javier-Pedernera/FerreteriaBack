@@ -17,7 +17,10 @@ class DetalleVenta(db.Model):
         return {
             "producto_id": self.producto_id,
             "producto": self.producto.nombre if self.producto else None,
+            "cod_interno": self.producto.cod_interno if self.producto else None,
+            "precio_costo": self.producto.precio_final if self.producto else None,
             "cantidad": self.cantidad,
             "precio_unitario": str(self.precio_unitario),
             "subtotal": str(self.cantidad * self.precio_unitario)
         }
+# git commit -m "agrego el codigo interno al detalle" 
