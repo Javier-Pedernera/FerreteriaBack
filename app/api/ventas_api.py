@@ -90,11 +90,18 @@ def cobrar_venta(venta_id):
     forma_pago_id = data.get('forma_pago_id')
     monto_abonado = data.get('monto_abonado')
     persona_autorizada_id = data.get('persona_autorizada_id')
+    observaciones = data.get('observaciones')
     if not forma_pago_id or monto_abonado is None:
         return jsonify({"error": "forma_pago_id y monto_abonado son requeridos"}), 400
 
     try:
-        venta_cobrada = VentaService.cobrar_venta(venta_id, forma_pago_id, float(monto_abonado),persona_autorizada_id)
+        venta_cobrada = VentaService.cobrar_venta(
+            venta_id,
+            forma_pago_id,
+            float(monto_abonado),
+            persona_autorizada_id,
+            observaciones 
+        )
         return jsonify(venta_cobrada), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 400
