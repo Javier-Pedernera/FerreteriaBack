@@ -91,6 +91,8 @@ def cobrar_venta(venta_id):
     monto_abonado = data.get('monto_abonado')
     persona_autorizada_id = data.get('persona_autorizada_id')
     observaciones = data.get('observaciones')
+    recargo_tarjeta = data.get('recargo_tarjeta')
+    descuento_aplicado = data.get('descuento_aplicado')
     if not forma_pago_id or monto_abonado is None:
         return jsonify({"error": "forma_pago_id y monto_abonado son requeridos"}), 400
 
@@ -100,7 +102,9 @@ def cobrar_venta(venta_id):
             forma_pago_id,
             float(monto_abonado),
             persona_autorizada_id,
-            observaciones 
+            observaciones,
+            float(recargo_tarjeta) if recargo_tarjeta is not None else 0,
+            float(descuento_aplicado) if descuento_aplicado is not None else 0
         )
         return jsonify(venta_cobrada), 200
     except Exception as e:

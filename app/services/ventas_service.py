@@ -197,7 +197,8 @@ class VentaService:
         return venta
     
     @staticmethod
-    def cobrar_venta(venta_id, forma_pago_id, monto_abonado, persona_autorizada_id=None, observaciones=None):
+    def cobrar_venta(venta_id, forma_pago_id, monto_abonado, persona_autorizada_id=None, observaciones=None, recargo_tarjeta=0,
+    descuento_aplicado=0):
         venta = Venta.query.get_or_404(venta_id)
         forma_pago = FormaPago.query.get_or_404(forma_pago_id)
 
@@ -225,6 +226,9 @@ class VentaService:
         if observaciones is not None:
             venta.observaciones = observaciones
 
+        venta.recargo_tarjeta = recargo_tarjeta
+        venta.descuento = descuento_aplicado
+        
         nuevo_estado = Status.query.filter_by(code=estado_code).first()
         if not nuevo_estado:
             raise Exception(f"Estado '{estado_code}' no encontrado")

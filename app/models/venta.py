@@ -16,7 +16,7 @@ class Venta(db.Model):
     observaciones = db.Column(db.Text, nullable=True)
     vendedor_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
     cliente_id = db.Column(db.Integer, db.ForeignKey('clientes.id'), nullable=True)
-    
+    recargo_tarjeta = db.Column(db.Numeric, default=0)
     persona_autorizada_id = db.Column(db.Integer, db.ForeignKey('personas_autorizadas.id'), nullable=True)
     persona_autorizada = db.relationship('PersonaAutorizada', lazy=True)
     
@@ -40,5 +40,6 @@ class Venta(db.Model):
             "vendedor": self.vendedor.nombre if self.vendedor else None,
             "cliente": self.cliente.serialize() if self.cliente else None,
             "detalles": [detalle.serialize() for detalle in self.detalles],
+            "recargo_tarjeta": str(self.recargo_tarjeta or 0),
             "persona_autorizada": self.persona_autorizada.serialize() if self.persona_autorizada else None
         }
