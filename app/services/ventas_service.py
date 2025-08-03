@@ -201,6 +201,7 @@ class VentaService:
     descuento_aplicado=0):
         venta = Venta.query.get_or_404(venta_id)
         forma_pago = FormaPago.query.get_or_404(forma_pago_id)
+        total_ajustado = float(venta.total) * (1 + recargo_tarjeta - descuento_aplicado)
 
         if not forma_pago:
             raise Exception("Forma de pago no válida")
@@ -210,8 +211,8 @@ class VentaService:
             venta.fecha_pago = None
             estado_code = 'on_account'
         else:
-            if monto_abonado < float(venta.total):
-                raise Exception("El monto abonado no cubre el total de la venta")
+            if monto_abonado < total_ajustado:
+                raise Exception("El monto abonado no cubre el total ajustado de la venta")
 
             venta.pagado = monto_abonado
             venta.fecha_pago = datetime.now(timezone.utc)
