@@ -26,6 +26,21 @@ class ClienteService:
             cuenta_corriente_activa=data.get('cuenta_corriente_activa', False)
         )
         db.session.add(cliente)
+        db.session.flush()  # Para que cliente tenga ID asignado antes del commit
+
+        # Crear persona autorizada con datos del cliente
+        estado_activo = StatusService.get_status_by_code('active')
+        persona_autorizada = PersonaAutorizada(
+            cliente_id=cliente.id,
+            nombre=cliente.nombre,
+            apellido='',  # No lo tienes en cliente, podrías extraerlo si está separado
+            dni=None,
+            email=cliente.email,
+            telefono=cliente.telefono,
+            estado_id=estado_activo.id if estado_activo else cliente.estado_id,
+        )
+        db.session.add(persona_autorizada)
+
         db.session.commit()
         return cliente
 
