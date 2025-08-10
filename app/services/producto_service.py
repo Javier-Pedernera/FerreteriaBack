@@ -1,6 +1,6 @@
 from app import db
 from app.models.producto import Producto
-from sqlalchemy import or_
+from sqlalchemy import case, or_
 from app.models.proveedor import Proveedor
 from app.utils.cloudinary_service import CloudinaryService
 
@@ -123,6 +123,24 @@ class ProductoService:
                 Producto.cod_proveedor.ilike(f"%{query}%")
             ))
 
+            # Detecta si es búsqueda de código
+            es_codigo = query.isdigit() or "-" in query or "." in query
+            if es_codigo:
+                # Exact match primero, luego parciales
+                prioridad = case(
+                    (Producto.cod_interno.ilike(query), 0),
+                    (Producto.cod_proveedor.ilike(query), 0),
+                    else_=1
+                )
+                q = q.order_by(prioridad, Producto.cod_interno.asc())
+            else:
+                # Exact match por nombre primero
+                prioridad = case(
+                    (Producto.nombre.ilike(query), 0),
+                    else_=1
+                )
+                q = q.order_by(prioridad, Producto.nombre.asc())
+
         if categoria_id:
             q = q.filter_by(categoria_id=categoria_id)
         if proveedor_id:
@@ -133,6 +151,6 @@ class ProductoService:
             q = q.filter_by(status_id=status_id)
 
         total = q.count()
-        productos = q.order_by(Producto.nombre).offset((page - 1) * limit).limit(limit).all()
+        productos = q.offset((page - 1) * limit).limit(limit).all()
 
         return productos, total
