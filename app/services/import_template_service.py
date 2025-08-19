@@ -201,7 +201,7 @@ def import_products_from_excel(plantilla_id, cotizacion_dolar, fecha_lista):
                     except ValueError:
                         presentacion_cantidad = None
 
-            es_fraccionable = False
+            es_fraccionable = None
             if plantilla.nombre_columna_es_fraccionable and plantilla.nombre_columna_es_fraccionable in df.columns:
                 val = row.get(plantilla.nombre_columna_es_fraccionable)
                 if val is not None and str(val).strip().lower() != "nan":
