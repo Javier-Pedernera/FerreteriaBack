@@ -227,17 +227,33 @@ def import_products_from_excel(plantilla_id, cotizacion_dolar, fecha_lista):
                 producto_existente.precio_ars = precio_ars
                 producto_existente.precio_usd = precio_usd
                 producto_existente.precio_sugerido = precio_sugerido
-                producto_existente.marca_id = marca.id if marca else None
-                producto_existente.categoria_id = categoria.id if categoria else None
-                producto_existente.nombre = nombre
-                producto_existente.descripcion = descripcion
-                producto_existente.nombre_corto = nombre_corto
-                producto_existente.ubicacion_local = ubicacion_local
-                producto_existente.unidad_medida_id = unidad_medida_id
-                producto_existente.presentacion_cantidad = presentacion_cantidad
-                producto_existente.es_fraccionable = es_fraccionable
-                producto_existente.porcentaje_ganancia = porcentaje_ganancia
-                producto_existente.porcentaje_ganancia_personalizado = porcentaje_ganancia_personalizado
+
+                # 🔹 Campos que solo se actualizan si el nuevo valor no es None
+                if marca:
+                    producto_existente.marca_id = marca.id
+                if categoria:
+                    producto_existente.categoria_id = categoria.id
+                if nombre is not None:
+                    producto_existente.nombre = nombre
+                if descripcion is not None:
+                    producto_existente.descripcion = descripcion
+                if nombre_corto is not None:
+                    producto_existente.nombre_corto = nombre_corto
+                if ubicacion_local is not None:
+                    producto_existente.ubicacion_local = ubicacion_local
+                if unidad_medida_id is not None:
+                    producto_existente.unidad_medida_id = unidad_medida_id
+                if presentacion_cantidad is not None:
+                    producto_existente.presentacion_cantidad = presentacion_cantidad
+                if es_fraccionable is not None:
+                    producto_existente.es_fraccionable = es_fraccionable
+                if porcentaje_ganancia is not None:
+                    producto_existente.porcentaje_ganancia = porcentaje_ganancia
+                if porcentaje_ganancia_personalizado is not None:
+                    producto_existente.porcentaje_ganancia_personalizado = porcentaje_ganancia_personalizado
+                if status_out_of_stock:
+                    producto_existente.status_id = status_out_of_stock.id
+
                 db.session.flush()
                 db.session.refresh(producto_existente)
 
