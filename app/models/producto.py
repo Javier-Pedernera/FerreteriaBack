@@ -55,15 +55,23 @@ class Producto(db.Model):
     
     def precio_por_unidad(self):
         try:
-            if not self.es_fraccionable:
+            if not self.presentacion_cantidad or self.presentacion_cantidad <= 0:
                 return float(self.precio_final) if self.precio_final else None
-            
-            if self.presentacion_cantidad and self.presentacion_cantidad > 0:
-                valor_real = float(self.precio_final) / self.presentacion_cantidad
-                redondeado = math.ceil(valor_real / 5) * 5
-                return redondeado
 
-            return None
+            valor_real = float(self.precio_final) / self.presentacion_cantidad
+
+            if not self.es_fraccionable:
+                # No es fraccionable → se vende entero, devuelvo precio final
+                return float(self.precio_final)
+
+            # Si es fraccionable, decido según la unidad de medida
+            if self.unidad_medida and self.unidad_medida.codigo in ["cm", "gr", "ml"]:
+                # Valores chicos → mantener 2 decimales
+                return round(valor_real, 2)
+            else:
+                # Unidades enteras fraccionables (ej: caja de tornillos) → redondeo múltiplo de 5
+                return math.ceil(valor_real / 5) * 5
+
         except Exception:
             return None
     

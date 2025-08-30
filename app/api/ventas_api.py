@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify
 from app.services.ventas_service import VentaService
+from decimal import Decimal
 
 ventas_api = Blueprint('ventas_api', __name__)
 

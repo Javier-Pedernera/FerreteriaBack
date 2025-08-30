@@ -201,7 +201,7 @@ class VentaService:
     descuento_aplicado=0):
         venta = Venta.query.get_or_404(venta_id)
         forma_pago = FormaPago.query.get_or_404(forma_pago_id)
-        total_ajustado = float(venta.total) * (1 + recargo_tarjeta - descuento_aplicado)
+        total_ajustado = round(float(venta.total) * (1 - float(descuento_aplicado) / 100), 2)
 
         if not forma_pago:
             raise Exception("Forma de pago no válida")
@@ -227,8 +227,8 @@ class VentaService:
         if observaciones is not None:
             venta.observaciones = observaciones
 
-        venta.recargo_tarjeta = recargo_tarjeta
-        venta.descuento = descuento_aplicado
+        venta.recargo_tarjeta = float(recargo_tarjeta)
+        venta.descuento = float(descuento_aplicado)
         
         nuevo_estado = Status.query.filter_by(code=estado_code).first()
         if not nuevo_estado:
