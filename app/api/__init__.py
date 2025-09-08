@@ -18,6 +18,7 @@ from .personas_autorizadas_api import personas_api
 from .usuarios_api import usuarios_bp
 from .status_api import status_api
 from .estadisticas_api import estadisticas_bp
+from .cuentas_api import cuentas_api
 
 def register_blueprints(app):
     
@@ -36,5 +37,6 @@ def register_blueprints(app):
     app.register_blueprint(personas_api, url_prefix='/api/personas-autorizadas')
     app.register_blueprint(status_api, url_prefix='/api')
     app.register_blueprint(estadisticas_bp, url_prefix='/api/estadisticas')
+    app.register_blueprint(cuentas_api, url_prefix='/api/cuentas')
     # app.register_blueprint(auth_api, url_prefix='/api')
     # app.register_blueprint(status_api, url_prefix='/api')

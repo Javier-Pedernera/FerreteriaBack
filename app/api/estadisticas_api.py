@@ -43,3 +43,9 @@ def resumen_ingresos_egresos():
 
     data = EstadisticasService.resumen_ingresos_egresos_diarios(fecha)
     return jsonify(data), 200
+
+# GET /estadisticas/ganancia-mensual
+@estadisticas_bp.route('/ganancia-mensual', methods=['GET'])
+def listar_ganancia_mensual():
+    data = EstadisticasService.ganancia_mensual()
+    return jsonify(data), 200

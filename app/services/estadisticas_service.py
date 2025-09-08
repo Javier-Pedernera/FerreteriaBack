@@ -275,3 +275,33 @@ class EstadisticasService:
                 "cantidad": egresos.cantidad_pedidos
             }
         }
+        
+    @staticmethod
+    def ganancia_mensual():
+        resultados = (
+            db.session.query(
+                func.extract("year", Venta.fecha_venta).label("anio"),
+                func.extract("month", Venta.fecha_venta).label("mes"),
+                func.sum(DetalleVenta.cantidad * DetalleVenta.precio_unitario).label("total_ventas"),
+                func.sum(DetalleVenta.cantidad * Producto.precio_ars).label("total_costos"),
+            )
+            .join(DetalleVenta, DetalleVenta.venta_id == Venta.id)
+            .join(Producto, Producto.id == DetalleVenta.producto_id)
+            .group_by("anio", "mes")
+            .order_by("anio", "mes")
+            .all()
+        )
+
+        data = []
+        for r in resultados:
+            total_ventas = float(r.total_ventas or 0)
+            total_costos = float(r.total_costos or 0)
+            ganancia = total_ventas - total_costos
+            data.append({
+                "mes": f"{int(r.anio)}-{int(r.mes):02d}",
+                "totalVentas": total_ventas,
+                "totalCostos": total_costos,
+                "gananciaNeta": ganancia
+            })
+
+        return data

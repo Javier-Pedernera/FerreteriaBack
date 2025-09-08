@@ -14,3 +14,5 @@ from .detalle_venta import DetalleVenta
 from .cliente import Cliente
 from .persona_autorizada import PersonaAutorizada
 from .usuario import Usuario
+from .cuentas import Cuenta
+from .movimiento_cuenta import MovimientoCuenta
