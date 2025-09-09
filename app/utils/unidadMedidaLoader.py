@@ -7,7 +7,7 @@ def initialize_unidades_medida():
         {'nombre': 'Metro', 'codigo': 'm', 'icono': 'ruler', 'descripcion': 'Medida de longitud'},
         {'nombre': 'Litro', 'codigo': 'l', 'icono': 'droplet', 'descripcion': 'Medida de volumen'},
         {'nombre': 'Kilogramo', 'codigo': 'kg', 'icono': 'weight', 'descripcion': 'Medida de peso'},
-        {'nombre': 'Gramos', 'codigo': 'grs', 'icono': 'weight', 'descripcion': 'Medida de peso'},
+        {'nombre': 'Gramos', 'codigo': 'gr', 'icono': 'weight', 'descripcion': 'Medida de peso'},
         {'nombre': 'Caja', 'codigo': 'caja', 'icono': 'box', 'descripcion': 'Presentación en caja'},
         {'nombre': 'Bolsa', 'codigo': 'bolsa', 'icono': 'shopping-bag', 'descripcion': 'Empaque tipo bolsa'},
         {'nombre': 'Par', 'codigo': 'par', 'icono': 'sliders', 'descripcion': 'Un par de unidades'},
