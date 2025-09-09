@@ -15,7 +15,12 @@ def initialize_unidades_medida():
     ]
 
     for unidad in unidades_default:
-        if not UnidadMedida.query.filter_by(codigo=unidad['codigo']).first():
+        existe = UnidadMedida.query.filter(
+            (UnidadMedida.codigo == unidad['codigo']) |
+            (UnidadMedida.nombre == unidad['nombre'])
+        ).first()
+
+        if not existe:
             nueva = UnidadMedida(**unidad)
             db.session.add(nueva)
 
