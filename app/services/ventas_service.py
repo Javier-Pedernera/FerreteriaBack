@@ -6,6 +6,7 @@ from app.models.forma_pago import FormaPago
 from app.models.venta import Venta
 from app.models.detalle_venta import DetalleVenta
 from app.models.status import Status
+from app.models.producto import Producto
 
 class VentaService:
 
@@ -27,13 +28,19 @@ class VentaService:
         db.session.flush()  # Necesario para obtener el ID antes del commit
 
         for item in data['detalles']:
-            detalle = DetalleVenta(
-                venta_id=venta.id,
-                producto_id=item['producto_id'],
-                cantidad=item['cantidad'],
-                precio_unitario=item['precio_unitario']
-            )
-            db.session.add(detalle)
+                producto = Producto.query.get(item['producto_id'])
+                if not producto:
+                    raise ValueError(f"Producto {item['producto_id']} no encontrado")
+
+                detalle = DetalleVenta(
+                    venta_id=venta.id,
+                    producto_id=item['producto_id'],
+                    cantidad=item['cantidad'],
+                    precio_unitario=item['precio_unitario'],
+                    precio_costo=producto.precio_ars  # 👈 CLAVE
+                )
+
+                db.session.add(detalle)
 
         db.session.commit()
         return venta.serialize()
@@ -162,7 +169,10 @@ class VentaService:
         venta.pagado = Decimal(data.get('pagado', venta.pagado or 0))
         venta.forma_pago_id = data.get('forma_pago_id', venta.forma_pago_id)
         venta.estado_id = data.get('estado_id', venta.estado_id)
-        venta.observaciones = data.get('observaciones', getattr(venta, 'observaciones', None))
+        venta.observaciones = data.get(
+            'observaciones',
+            getattr(venta, 'observaciones', None)
+        )
 
         # Manejo de detalles
         nuevos_detalles = data.get('detalles', [])
@@ -181,15 +191,22 @@ class VentaService:
             precio_unitario = Decimal(d['precio_unitario'])
 
             if producto_id in existentes_map:
+                # 🔁 Detalle existente → NO tocar precio_costo
                 detalle = existentes_map[producto_id]
                 detalle.cantidad = cantidad
                 detalle.precio_unitario = precio_unitario
             else:
+                # 🆕 Detalle nuevo → copiar precio_costo actual del producto
+                producto = Producto.query.get(producto_id)
+                if not producto:
+                    raise ValueError(f"Producto {producto_id} no encontrado")
+
                 nuevo_detalle = DetalleVenta(
                     venta_id=venta.id,
                     producto_id=producto_id,
                     cantidad=cantidad,
-                    precio_unitario=precio_unitario
+                    precio_unitario=precio_unitario,
+                    precio_costo=producto.precio_ars  # 👈 CLAVE
                 )
                 db.session.add(nuevo_detalle)
 

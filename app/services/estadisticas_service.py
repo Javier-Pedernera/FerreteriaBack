@@ -279,31 +279,31 @@ class EstadisticasService:
     # --------------------------------------------------
     @staticmethod
     def ganancia_mensual():
-        resultados = db.session.query(
-            func.extract('year', Venta.fecha_pago),
-            func.extract('month', Venta.fecha_pago),
-            func.sum(DetalleVenta.cantidad * DetalleVenta.precio_unitario),
-            func.sum(DetalleVenta.cantidad * Producto.precio_ars)
-        ).join(
-            DetalleVenta, DetalleVenta.venta_id == Venta.id
-        ).join(
-            Producto, Producto.id == DetalleVenta.producto_id
-        ).filter(
-            Venta.fecha_pago.isnot(None)
-        ).group_by(
-            func.extract('year', Venta.fecha_pago),
-            func.extract('month', Venta.fecha_pago)
-        ).order_by(
-            func.extract('year', Venta.fecha_pago),
-            func.extract('month', Venta.fecha_pago)
-        ).all()
+        resultados = (
+            db.session.query(
+                func.extract('year', Venta.fecha_pago).label('anio'),
+                func.extract('month', Venta.fecha_pago).label('mes'),
+                func.sum(
+                    DetalleVenta.cantidad * DetalleVenta.precio_unitario
+                ).label('total_ventas'),
+                func.sum(
+                    DetalleVenta.cantidad *
+                    func.coalesce(DetalleVenta.precio_costo, 0)
+                ).label('total_costos')
+            )
+            .join(DetalleVenta, DetalleVenta.venta_id == Venta.id)
+            .filter(Venta.fecha_pago.isnot(None))
+            .group_by('anio', 'mes')
+            .order_by('anio', 'mes')
+            .all()
+        )
 
         return [
             {
-                "mes": f"{int(r[0])}-{int(r[1]):02d}",
-                "totalVentas": float(r[2] or 0),
-                "totalCostos": float(r[3] or 0),
-                "gananciaNeta": float((r[2] or 0) - (r[3] or 0))
+                "mes": f"{int(r.anio)}-{int(r.mes):02d}",
+                "totalVentas": float(r.total_ventas),
+                "totalCostos": float(r.total_costos),
+                "gananciaNeta": float(r.total_ventas - r.total_costos)
             }
             for r in resultados
         ]
