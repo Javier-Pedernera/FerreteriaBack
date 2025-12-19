@@ -28,19 +28,31 @@ class VentaService:
         db.session.flush()  # Necesario para obtener el ID antes del commit
 
         for item in data['detalles']:
-                producto = Producto.query.get(item['producto_id'])
-                if not producto:
-                    raise ValueError(f"Producto {item['producto_id']} no encontrado")
+            producto = Producto.query.get(item['producto_id'])
+            if not producto:
+                raise ValueError(f"Producto {item['producto_id']} no encontrado")
 
-                detalle = DetalleVenta(
-                    venta_id=venta.id,
-                    producto_id=item['producto_id'],
-                    cantidad=item['cantidad'],
-                    precio_unitario=item['precio_unitario'],
-                    precio_costo=producto.precio_ars  # 👈 CLAVE
+            if (
+                producto.es_fraccionable and
+                producto.presentacion_cantidad and
+                producto.presentacion_cantidad > 0
+            ):
+                precio_costo_unitario = (
+                    Decimal(producto.precio_ars) /
+                    Decimal(producto.presentacion_cantidad)
                 )
+            else:
+                precio_costo_unitario = Decimal(producto.precio_ars)
 
-                db.session.add(detalle)
+            detalle = DetalleVenta(
+                venta_id=venta.id,
+                producto_id=item['producto_id'],
+                cantidad=int(item['cantidad']),
+                precio_unitario=Decimal(item['precio_unitario']),
+                precio_costo=precio_costo_unitario
+            )
+
+            db.session.add(detalle)
 
         db.session.commit()
         return venta.serialize()
@@ -201,12 +213,24 @@ class VentaService:
                 if not producto:
                     raise ValueError(f"Producto {producto_id} no encontrado")
 
+                if (
+                    producto.es_fraccionable and
+                    producto.presentacion_cantidad and
+                    producto.presentacion_cantidad > 0
+                ):
+                    precio_costo_unitario = (
+                        Decimal(producto.precio_ars) /
+                        Decimal(producto.presentacion_cantidad)
+                    )
+                else:
+                    precio_costo_unitario = Decimal(producto.precio_ars)
+
                 nuevo_detalle = DetalleVenta(
                     venta_id=venta.id,
                     producto_id=producto_id,
                     cantidad=cantidad,
                     precio_unitario=precio_unitario,
-                    precio_costo=producto.precio_ars  # 👈 CLAVE
+                    precio_costo=precio_costo_unitario
                 )
                 db.session.add(nuevo_detalle)
 
