@@ -288,8 +288,8 @@ class EstadisticasService:
                 ).label('total_ventas'),
                 func.sum(
                     DetalleVenta.cantidad *
-                    func.coalesce(DetalleVenta.precio_costo, 0)
-                ).label('total_costos')
+                    (DetalleVenta.precio_unitario - DetalleVenta.precio_costo)
+                ).label('ganancia_neta')
             )
             .join(DetalleVenta, DetalleVenta.venta_id == Venta.id)
             .filter(Venta.fecha_pago.isnot(None))
@@ -302,8 +302,12 @@ class EstadisticasService:
             {
                 "mes": f"{int(r.anio)}-{int(r.mes):02d}",
                 "totalVentas": float(r.total_ventas),
-                "totalCostos": float(r.total_costos),
-                "gananciaNeta": float(r.total_ventas - r.total_costos)
+                "gananciaNeta": float(r.ganancia_neta),
+                "porcentajeGanancia": (
+                    round((r.ganancia_neta / r.total_ventas) * 100, 2)
+                    if r.total_ventas and r.total_ventas > 0
+                    else 0
+                )
             }
             for r in resultados
         ]
