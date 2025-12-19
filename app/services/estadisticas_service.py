@@ -19,23 +19,23 @@ class EstadisticasService:
 
         if periodo == 'diario':
             q = db.session.query(
-                func.date(Venta.fecha_creacion).label('fecha'),
+                func.date(Venta.fecha_venta).label('fecha'),
                 func.sum(Venta.total).label('totalVentas'),
                 func.count(Venta.id).label('cantidadVentas')
             ).filter(
                 Venta.fecha_pago.isnot(None)
             ).group_by(
-                func.date(Venta.fecha_creacion)
+                func.date(Venta.fecha_venta)
             ).order_by(
-                func.date(Venta.fecha_creacion)
+                func.date(Venta.fecha_venta)
             )
 
         elif periodo == 'mensual':
             q = db.session.query(
                 func.concat(
-                    func.extract('year', Venta.fecha_creacion).cast(db.String),
+                    func.extract('year', Venta.fecha_venta).cast(db.String),
                     '-',
-                    func.lpad(func.extract('month', Venta.fecha_creacion).cast(db.String), 2, '0')
+                    func.lpad(func.extract('month', Venta.fecha_venta).cast(db.String), 2, '0')
                 ).label('fecha'),
                 func.sum(Venta.total).label('totalVentas'),
                 func.count(Venta.id).label('cantidadVentas')
@@ -45,7 +45,7 @@ class EstadisticasService:
 
         elif periodo == 'anual':
             q = db.session.query(
-                func.extract('year', Venta.fecha_creacion).cast(db.String).label('fecha'),
+                func.extract('year', Venta.fecha_venta).cast(db.String).label('fecha'),
                 func.sum(Venta.total).label('totalVentas'),
                 func.count(Venta.id).label('cantidadVentas')
             ).filter(
@@ -159,7 +159,7 @@ class EstadisticasService:
             func.count(Venta.id)
         ).filter(
             Venta.fecha_pago.isnot(None),
-            func.date(Venta.fecha_pago) == hoy
+            func.date(Venta.fecha_venta) == hoy
         ).first()
 
         # Ventas mes
@@ -168,8 +168,8 @@ class EstadisticasService:
             func.count(Venta.id)
         ).filter(
             Venta.fecha_pago.isnot(None),
-            func.extract('month', Venta.fecha_pago) == mes,
-            func.extract('year', Venta.fecha_pago) == anio
+            func.extract('month', Venta.fecha_venta) == mes,
+            func.extract('year', Venta.fecha_venta) == anio
         ).first()
 
         # Top productos
@@ -183,8 +183,8 @@ class EstadisticasService:
             Venta, Venta.id == DetalleVenta.venta_id
         ).filter(
             Venta.fecha_pago.isnot(None),
-            func.extract('month', Venta.fecha_pago) == mes,
-            func.extract('year', Venta.fecha_pago) == anio
+            func.extract('month', Venta.fecha_venta) == mes,
+            func.extract('year', Venta.fecha_venta) == anio
         ).group_by(
             Producto.nombre
         ).order_by(
@@ -194,16 +194,16 @@ class EstadisticasService:
         # Ventas últimos 15 días
         inicio = hoy - timedelta(days=15)
         ventas_por_dia = db.session.query(
-            func.date(Venta.fecha_pago),
+            func.date(Venta.fecha_venta),
             func.sum(Venta.total),
             func.count(Venta.id)
         ).filter(
             Venta.fecha_pago.isnot(None),
             Venta.fecha_pago >= inicio
         ).group_by(
-            func.date(Venta.fecha_pago)
+            func.date(Venta.fecha_venta)
         ).order_by(
-            func.date(Venta.fecha_pago)
+            func.date(Venta.fecha_venta)
         ).all()
 
         return {
@@ -238,7 +238,7 @@ class EstadisticasService:
             func.count(Venta.id)
         ).filter(
             Venta.fecha_pago.isnot(None),
-            func.date(Venta.fecha_pago) == fecha
+            func.date(Venta.fecha_venta) == fecha
         ).one()
 
         total_por_pedido = (
@@ -281,8 +281,8 @@ class EstadisticasService:
     def ganancia_mensual():
         resultados = (
             db.session.query(
-                func.extract('year', Venta.fecha_pago).label('anio'),
-                func.extract('month', Venta.fecha_pago).label('mes'),
+                func.extract('year', Venta.fecha_venta).label('anio'),
+                func.extract('month', Venta.fecha_venta).label('mes'),
                 func.sum(
                     DetalleVenta.cantidad * DetalleVenta.precio_unitario
                 ).label('total_ventas'),
