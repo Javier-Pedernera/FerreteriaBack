@@ -19,23 +19,23 @@ class EstadisticasService:
 
         if periodo == 'diario':
             q = db.session.query(
-                func.date(Venta.fecha_pago).label('fecha'),
+                func.date(Venta.fecha_creacion).label('fecha'),
                 func.sum(Venta.total).label('totalVentas'),
                 func.count(Venta.id).label('cantidadVentas')
             ).filter(
                 Venta.fecha_pago.isnot(None)
             ).group_by(
-                func.date(Venta.fecha_pago)
+                func.date(Venta.fecha_creacion)
             ).order_by(
-                func.date(Venta.fecha_pago)
+                func.date(Venta.fecha_creacion)
             )
 
         elif periodo == 'mensual':
             q = db.session.query(
                 func.concat(
-                    func.extract('year', Venta.fecha_pago).cast(db.String),
+                    func.extract('year', Venta.fecha_creacion).cast(db.String),
                     '-',
-                    func.lpad(func.extract('month', Venta.fecha_pago).cast(db.String), 2, '0')
+                    func.lpad(func.extract('month', Venta.fecha_creacion).cast(db.String), 2, '0')
                 ).label('fecha'),
                 func.sum(Venta.total).label('totalVentas'),
                 func.count(Venta.id).label('cantidadVentas')
@@ -45,7 +45,7 @@ class EstadisticasService:
 
         elif periodo == 'anual':
             q = db.session.query(
-                func.extract('year', Venta.fecha_pago).cast(db.String).label('fecha'),
+                func.extract('year', Venta.fecha_creacion).cast(db.String).label('fecha'),
                 func.sum(Venta.total).label('totalVentas'),
                 func.count(Venta.id).label('cantidadVentas')
             ).filter(
