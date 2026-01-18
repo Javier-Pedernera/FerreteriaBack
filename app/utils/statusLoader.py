@@ -17,6 +17,11 @@ def initialize_statuses():
         {'code': 'on_account', 'label': 'Cuenta corriente'},
         {'code': 'in_progress', 'label': 'En proceso'},
         {'code': 'charged', 'label': 'Cobrado'},
+        # 🧾 RESÚMENES / FACTURACIÓN
+        {'code': 'draft', 'label': 'Borrador'},
+        {'code': 'ready_to_invoice', 'label': 'Listo para facturar'},
+        {'code': 'invoiced', 'label': 'Facturado'},
+        {'code': 'cancelled', 'label': 'Anulado'},
         # {'code': 'inactive', 'label': 'Inactivo'},
     ]
 

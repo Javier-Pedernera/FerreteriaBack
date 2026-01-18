@@ -16,3 +16,5 @@ from .persona_autorizada import PersonaAutorizada
 from .usuario import Usuario
 from .cuentas import Cuenta
 from .movimiento_cuenta import MovimientoCuenta
+from .pago import Pago
+from .resumen_cuenta_corriente import ResumenCuentaCorriente

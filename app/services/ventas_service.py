@@ -7,6 +7,7 @@ from app.models.venta import Venta
 from app.models.detalle_venta import DetalleVenta
 from app.models.status import Status
 from app.models.producto import Producto
+from app.services.status_service import StatusService
 
 class VentaService:
 
@@ -66,7 +67,16 @@ class VentaService:
 
     @staticmethod
     def obtener_todas():
-        return [v.serialize() for v in Venta.query.order_by(Venta.fecha_venta.desc()).all()]
+        estado_deleted = Status.query.filter_by(code='deleted').first()
+
+        query = Venta.query
+        if estado_deleted:
+            query = query.filter(Venta.estado_id != estado_deleted.id)
+
+        return [
+            v.serialize()
+            for v in query.order_by(Venta.fecha_venta.desc()).all()
+        ]
 
     @staticmethod
     def actualizar(venta_id, data):
@@ -84,12 +94,18 @@ class VentaService:
         return venta.serialize()
 
     @staticmethod
-    def eliminar(venta_id):
+    def eliminar_logico(venta_id):
         venta = Venta.query.get(venta_id)
         if not venta:
             raise ValueError("Venta no encontrada")
-        db.session.delete(venta)
+
+        estado_deleted = Status.query.filter_by(code='deleted').first()
+        if not estado_deleted:
+            raise ValueError("Estado 'deleted' no encontrado")
+
+        venta.estado_id = estado_deleted.id
         db.session.commit()
+
         return {"message": "Venta eliminada correctamente"}
 
     @staticmethod
@@ -133,15 +149,26 @@ class VentaService:
     def obtener_filtradas(estado_code=None, fecha_str=None, page=1, per_page=10):
         query = Venta.query.join(Status, Venta.estado_id == Status.id)
 
+        estado_deleted = Status.query.filter_by(code='deleted').first()
+
+        # 1️⃣ Manejo del estado
         if estado_code:
             estado = Status.query.filter_by(code=estado_code).first()
-            if estado:
-                query = query.filter(Venta.estado_id == estado.id)
+            if not estado:
+                raise ValueError(f"Estado '{estado_code}' no encontrado")
 
+            query = query.filter(Venta.estado_id == estado.id)
+        else:
+            # ⚠️ Si NO se filtra por estado → excluir eliminadas
+            if estado_deleted:
+                query = query.filter(Venta.estado_id != estado_deleted.id)
+
+        # 2️⃣ Filtro por fecha
         if fecha_str:
             try:
                 fecha = datetime.strptime(fecha_str, '%Y-%m-%d')
                 fecha_fin = fecha + timedelta(days=1)
+
                 query = query.filter(and_(
                     Venta.fecha_venta >= fecha,
                     Venta.fecha_venta < fecha_fin
@@ -149,7 +176,11 @@ class VentaService:
             except ValueError:
                 raise ValueError("Formato de fecha inválido. Use YYYY-MM-DD")
 
-        paginado = query.order_by(Venta.fecha_venta.desc()).paginate(page=page, per_page=per_page, error_out=False)
+        paginado = query.order_by(Venta.fecha_venta.desc()).paginate(
+            page=page,
+            per_page=per_page,
+            error_out=False
+        )
 
         return {
             "data": [v.serialize() for v in paginado.items],
@@ -171,6 +202,7 @@ class VentaService:
 
         return venta_en_proceso is not None
     
+    @staticmethod
     def actualizar_venta(venta_id: int, data: dict) -> Venta:
         venta = Venta.query.get_or_404(venta_id)
 
@@ -178,52 +210,52 @@ class VentaService:
         venta.cliente_id = data.get('cliente_id', venta.cliente_id)
         venta.total = Decimal(data.get('total', venta.total))
         venta.descuento = Decimal(data.get('descuento', venta.descuento or 0))
-        venta.pagado = Decimal(data.get('pagado', venta.pagado or 0))
         venta.forma_pago_id = data.get('forma_pago_id', venta.forma_pago_id)
-        venta.estado_id = data.get('estado_id', venta.estado_id)
-        venta.observaciones = data.get(
-            'observaciones',
-            getattr(venta, 'observaciones', None)
-        )
+        venta.observaciones = data.get('observaciones', getattr(venta, 'observaciones', None))
 
-        # Manejo de detalles
+        # 🔹 Solo actualizar pagado si viene en data
+        if 'pagado' in data:
+            venta.pagado = Decimal(data['pagado'] or 0)
+
+        # 🔹 Actualizar saldo correctamente
+        venta.actualizar_saldo()
+
+        # 🔹 Si se pagó todo, poner fecha_pago y estado "charged"
+        if venta.saldo <= 0:
+            estado_pagada = StatusService.get_status_by_code('charged')
+            if estado_pagada:
+                venta.estado_id = estado_pagada.id
+            if not venta.fecha_pago:
+                venta.fecha_pago = datetime.now()
+
+        # Manejo de detalles (igual que antes)
         nuevos_detalles = data.get('detalles', [])
         existentes_map = {d.producto_id: d for d in venta.detalles}
         nuevos_ids = {d['producto_id'] for d in nuevos_detalles}
 
-        # Eliminar detalles que ya no están
         for producto_id in list(existentes_map):
             if producto_id not in nuevos_ids:
                 db.session.delete(existentes_map[producto_id])
 
-        # Agregar o actualizar
         for d in nuevos_detalles:
             producto_id = d['producto_id']
-            cantidad = int(d['cantidad'])
+            cantidad = d['cantidad']
             precio_unitario = Decimal(d['precio_unitario'])
 
             if producto_id in existentes_map:
-                # 🔁 Detalle existente → NO tocar precio_costo
                 detalle = existentes_map[producto_id]
                 detalle.cantidad = cantidad
                 detalle.precio_unitario = precio_unitario
             else:
-                # 🆕 Detalle nuevo → copiar precio_costo actual del producto
                 producto = Producto.query.get(producto_id)
                 if not producto:
                     raise ValueError(f"Producto {producto_id} no encontrado")
 
-                if (
-                    producto.es_fraccionable and
-                    producto.presentacion_cantidad and
-                    producto.presentacion_cantidad > 0
-                ):
-                    precio_costo_unitario = (
-                        Decimal(producto.precio_ars) /
-                        Decimal(producto.presentacion_cantidad)
-                    )
-                else:
-                    precio_costo_unitario = Decimal(producto.precio_ars)
+                precio_costo_unitario = (
+                    Decimal(producto.precio_ars) / Decimal(producto.presentacion_cantidad)
+                    if producto.es_fraccionable and producto.presentacion_cantidad
+                    else Decimal(producto.precio_ars)
+                )
 
                 nuevo_detalle = DetalleVenta(
                     venta_id=venta.id,
@@ -238,39 +270,45 @@ class VentaService:
         return venta
     
     @staticmethod
-    def cobrar_venta(venta_id, forma_pago_id, monto_abonado, persona_autorizada_id=None, observaciones=None, recargo_tarjeta=0,
-    descuento_aplicado=0):
+    def cobrar_venta(
+        venta_id,
+        forma_pago_id,
+        monto_abonado,
+        persona_autorizada_id=None,
+        observaciones=None,
+        recargo_tarjeta=0,
+        descuento_aplicado=0
+    ):
         venta = Venta.query.get_or_404(venta_id)
         forma_pago = FormaPago.query.get_or_404(forma_pago_id)
-        total_ajustado = round(float(venta.total) * (1 - float(descuento_aplicado) / 100), 2)
 
-        if not forma_pago:
-            raise Exception("Forma de pago no válida")
+        total_ajustado = Decimal(venta.total) * (Decimal("1") - Decimal(descuento_aplicado) / Decimal("100"))
 
         if forma_pago.nombre.lower() == 'cuenta corriente':
-            venta.pagado = 0
+            venta.pagado = Decimal("0")
             venta.fecha_pago = None
             estado_code = 'on_account'
         else:
-            if monto_abonado < total_ajustado:
-                raise Exception("El monto abonado no cubre el total ajustado de la venta")
+            if Decimal(monto_abonado) < total_ajustado:
+                raise Exception("El monto abonado no cubre el total")
 
-            venta.pagado = monto_abonado
-            venta.fecha_pago = datetime.now(timezone.utc)
+            venta.pagado = Decimal(monto_abonado)
             estado_code = 'charged'
+
+        # 🔥 ESTA LÍNEA ES LA CLAVE 🔥
+        venta.actualizar_saldo()
 
         venta.forma_pago_id = forma_pago_id
 
         if persona_autorizada_id:
             venta.persona_autorizada_id = persona_autorizada_id
 
-        # <-- acá asignás las observaciones
         if observaciones is not None:
             venta.observaciones = observaciones
 
-        venta.recargo_tarjeta = float(recargo_tarjeta)
-        venta.descuento = float(descuento_aplicado)
-        
+        venta.recargo_tarjeta = Decimal(recargo_tarjeta)
+        venta.descuento = Decimal(descuento_aplicado)
+
         nuevo_estado = Status.query.filter_by(code=estado_code).first()
         if not nuevo_estado:
             raise Exception(f"Estado '{estado_code}' no encontrado")

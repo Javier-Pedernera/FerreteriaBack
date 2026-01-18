@@ -48,11 +48,11 @@ def obtener(venta_id):
 #     except Exception as e:
 #         return jsonify({'error': str(e)}), 400
 
-@ventas_api.route('/<int:venta_id>', methods=['DELETE'])
-def eliminar(venta_id):
+@ventas_api.route('/<int:venta_id>/eliminar', methods=['PUT'])
+def eliminar_logico(venta_id):
     try:
-        result = VentaService.eliminar_venta(venta_id)
-        return jsonify(result)
+        venta = VentaService.eliminar_logico(venta_id)
+        return jsonify(venta), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 400
     

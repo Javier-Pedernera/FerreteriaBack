@@ -1,6 +1,7 @@
 from sqlalchemy import func
 from datetime import date, timedelta
 from app import db
+from app.models.status import Status
 from app.models.venta import Venta
 from app.models.cliente import Cliente
 from app.models.detalle_venta import DetalleVenta
@@ -17,13 +18,16 @@ class EstadisticasService:
     @staticmethod
     def ventas_por_periodo(periodo='diario'):
 
+        deleted_status_id = db.session.query(Status.id).filter(Status.code == 'deleted').scalar()
+
         if periodo == 'diario':
             q = db.session.query(
                 func.date(Venta.fecha_venta).label('fecha'),
                 func.sum(Venta.total).label('totalVentas'),
                 func.count(Venta.id).label('cantidadVentas')
             ).filter(
-                Venta.fecha_pago.isnot(None)
+                Venta.fecha_pago.isnot(None),
+                Venta.estado_id != deleted_status_id   # 👈 SOLO ESTO
             ).group_by(
                 func.date(Venta.fecha_venta)
             ).order_by(
@@ -40,7 +44,8 @@ class EstadisticasService:
                 func.sum(Venta.total).label('totalVentas'),
                 func.count(Venta.id).label('cantidadVentas')
             ).filter(
-                Venta.fecha_pago.isnot(None)
+                Venta.fecha_pago.isnot(None),
+                Venta.estado_id != deleted_status_id   # 👈 SOLO ESTO
             ).group_by('fecha').order_by('fecha')
 
         elif periodo == 'anual':
@@ -49,7 +54,8 @@ class EstadisticasService:
                 func.sum(Venta.total).label('totalVentas'),
                 func.count(Venta.id).label('cantidadVentas')
             ).filter(
-                Venta.fecha_pago.isnot(None)
+                Venta.fecha_pago.isnot(None),
+                Venta.estado_id != deleted_status_id   # 👈 SOLO ESTO
             ).group_by('fecha').order_by('fecha')
         else:
             return []
@@ -63,18 +69,23 @@ class EstadisticasService:
             for r in q.all()
         ]
 
+
     # --------------------------------------------------
     # TOP CLIENTES (SOLO COBRADAS)
     # --------------------------------------------------
     @staticmethod
     def top_clientes(limite=10):
+
+        deleted_status_id = db.session.query(Status.id).filter(Status.code == 'deleted').scalar()
+
         q = db.session.query(
             Cliente.nombre.label('cliente'),
             func.sum(Venta.total).label('totalCompras')
         ).join(
             Venta, Venta.cliente_id == Cliente.id
         ).filter(
-            Venta.fecha_pago.isnot(None)
+            Venta.fecha_pago.isnot(None),
+            Venta.estado_id != deleted_status_id   # 👈
         ).group_by(
             Cliente.id
         ).order_by(
@@ -95,6 +106,8 @@ class EstadisticasService:
     @staticmethod
     def ventas_cliente(cliente_id, periodo='diario'):
 
+        deleted_status_id = db.session.query(Status.id).filter(Status.code == 'deleted').scalar()
+
         if periodo == 'diario':
             q = db.session.query(
                 func.date(Venta.fecha_pago).label('fecha'),
@@ -102,7 +115,8 @@ class EstadisticasService:
                 func.count(Venta.id).label('cantidadVentas')
             ).filter(
                 Venta.cliente_id == cliente_id,
-                Venta.fecha_pago.isnot(None)
+                Venta.fecha_pago.isnot(None),
+                Venta.estado_id != deleted_status_id   # 👈
             ).group_by(
                 func.date(Venta.fecha_pago)
             ).order_by(
@@ -120,7 +134,8 @@ class EstadisticasService:
                 func.count(Venta.id).label('cantidadVentas')
             ).filter(
                 Venta.cliente_id == cliente_id,
-                Venta.fecha_pago.isnot(None)
+                Venta.fecha_pago.isnot(None),
+                Venta.estado_id != deleted_status_id   # 👈
             ).group_by('fecha').order_by('fecha')
 
         elif periodo == 'anual':
@@ -130,7 +145,8 @@ class EstadisticasService:
                 func.count(Venta.id).label('cantidadVentas')
             ).filter(
                 Venta.cliente_id == cliente_id,
-                Venta.fecha_pago.isnot(None)
+                Venta.fecha_pago.isnot(None),
+                Venta.estado_id != deleted_status_id   # 👈
             ).group_by('fecha').order_by('fecha')
         else:
             return []
@@ -143,7 +159,6 @@ class EstadisticasService:
             }
             for r in q.all()
         ]
-
     # --------------------------------------------------
     # RESUMEN GENERAL
     # --------------------------------------------------
@@ -157,8 +172,11 @@ class EstadisticasService:
         total_hoy, cant_hoy = db.session.query(
             func.coalesce(func.sum(Venta.total), 0),
             func.count(Venta.id)
+        ).join(
+            Status, Status.id == Venta.estado_id
         ).filter(
             Venta.fecha_pago.isnot(None),
+            Status.code != 'deleted',
             func.date(Venta.fecha_venta) == hoy
         ).first()
 
@@ -166,8 +184,11 @@ class EstadisticasService:
         total_mes, cant_mes = db.session.query(
             func.coalesce(func.sum(Venta.total), 0),
             func.count(Venta.id)
+        ).join(
+            Status, Status.id == Venta.estado_id
         ).filter(
             Venta.fecha_pago.isnot(None),
+            Status.code != 'deleted',
             func.extract('month', Venta.fecha_venta) == mes,
             func.extract('year', Venta.fecha_venta) == anio
         ).first()
@@ -181,8 +202,11 @@ class EstadisticasService:
             Producto, Producto.id == DetalleVenta.producto_id
         ).join(
             Venta, Venta.id == DetalleVenta.venta_id
+        ).join(
+            Status, Status.id == Venta.estado_id
         ).filter(
             Venta.fecha_pago.isnot(None),
+            Status.code != 'deleted',
             func.extract('month', Venta.fecha_venta) == mes,
             func.extract('year', Venta.fecha_venta) == anio
         ).group_by(
@@ -197,8 +221,11 @@ class EstadisticasService:
             func.date(Venta.fecha_venta),
             func.sum(Venta.total),
             func.count(Venta.id)
+        ).join(
+            Status, Status.id == Venta.estado_id
         ).filter(
             Venta.fecha_pago.isnot(None),
+            Status.code != 'deleted',
             Venta.fecha_pago >= inicio
         ).group_by(
             func.date(Venta.fecha_venta)
@@ -224,7 +251,6 @@ class EstadisticasService:
                 for v in ventas_por_dia
             ]
         }
-
     # --------------------------------------------------
     # INGRESOS / EGRESOS DIARIOS
     # --------------------------------------------------
@@ -236,8 +262,11 @@ class EstadisticasService:
         ingresos = db.session.query(
             func.coalesce(func.sum(Venta.total), 0),
             func.count(Venta.id)
+        ).join(
+            Status, Status.id == Venta.estado_id
         ).filter(
             Venta.fecha_pago.isnot(None),
+            Status.code != 'deleted',
             func.date(Venta.fecha_venta) == fecha
         ).one()
 
@@ -292,7 +321,11 @@ class EstadisticasService:
                 ).label('ganancia_neta')
             )
             .join(DetalleVenta, DetalleVenta.venta_id == Venta.id)
-            .filter(Venta.fecha_pago.isnot(None))
+            .join(Status, Status.id == Venta.estado_id)
+            .filter(
+                Venta.fecha_pago.isnot(None),
+                Status.code != 'deleted'
+            )
             .group_by('anio', 'mes')
             .order_by('anio', 'mes')
             .all()

@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from decimal import Decimal
 from app import db
 
 class Venta(db.Model):
@@ -11,6 +12,7 @@ class Venta(db.Model):
     total = db.Column(db.Numeric, nullable=False)
     descuento = db.Column(db.Numeric, default=0)
     pagado = db.Column(db.Numeric, default=0)
+    saldo = db.Column(db.Numeric, default=0)  # NUEVO CAMPO
     forma_pago_id = db.Column(db.Integer, db.ForeignKey('formas_pago.id'), nullable=True)
     estado_id = db.Column(db.Integer, db.ForeignKey('status.id'), nullable=False)
     observaciones = db.Column(db.Text, nullable=True)
@@ -27,6 +29,14 @@ class Venta(db.Model):
 
     detalles = db.relationship('DetalleVenta', back_populates='venta', lazy=True)
 
+    def actualizar_saldo(self):
+        """Actualiza el saldo según total y pagado y setea fecha_pago si se paga totalmente."""
+        self.saldo = (self.total or 0) - (self.pagado or 0)
+        if self.saldo <= 0:
+            self.saldo = Decimal("0")
+            if not self.fecha_pago:
+                self.fecha_pago = datetime.now(timezone.utc)
+
     def serialize(self):
         return {
             "id": self.id,
@@ -35,6 +45,7 @@ class Venta(db.Model):
             "total": str(self.total),
             "descuento": str(self.descuento),
             "pagado": str(self.pagado),
+            "saldo": str(self.saldo),  # NUEVO
             "forma_pago": self.forma_pago.nombre if self.forma_pago else None,
             "estado": self.estado.label if self.estado else None,
             "vendedor": self.vendedor.nombre if self.vendedor else None,

@@ -7,8 +7,8 @@ class DetalleVenta(db.Model):
     venta_id = db.Column(db.Integer, db.ForeignKey('ventas.id'), nullable=False)
     producto_id = db.Column(db.Integer, db.ForeignKey('productos.id'), nullable=False)
     precio_costo = db.Column(db.Numeric(12, 2), nullable=True)
-    cantidad = db.Column(db.Integer, nullable=False)
-    precio_unitario = db.Column(db.Numeric, nullable=False)
+    cantidad = db.Column(db.Numeric(10, 3), nullable=False)
+    precio_unitario = db.Column(db.Numeric(12, 2), nullable=False)
 
     venta = db.relationship('Venta', back_populates='detalles', lazy=True)
     producto = db.relationship('Producto', back_populates='detalles_venta', lazy=True)
@@ -22,7 +22,7 @@ class DetalleVenta(db.Model):
         "cod_interno": getattr(producto, "cod_interno", None),
         "precio_costo": str(self.precio_costo),
         "presentacion_cantidad": getattr(producto, "presentacion_cantidad", None),
-        "unidad_medida": getattr(producto, "unidad_medida.codigo", None) if producto and producto.unidad_medida else None,
+        "unidad_medida": producto.unidad_medida.codigo if producto and producto.unidad_medida else None,
         "disponibles": getattr(producto, "disponibles", None),
         "cantidad": self.cantidad,
         "precio_unitario": str(self.precio_unitario),

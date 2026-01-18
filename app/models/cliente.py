@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from decimal import Decimal
 from app import db
 
 class Cliente(db.Model):
@@ -14,9 +15,11 @@ class Cliente(db.Model):
     creado_en = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     estado_id = db.Column(db.Integer, db.ForeignKey('status.id'), nullable=False)
     cuenta_corriente_activa = db.Column(db.Boolean, default=False)
+    saldo_favor = db.Column(db.Numeric(12,2), default=Decimal(0))
     
     estado = db.relationship('Status', lazy=True)
     ventas = db.relationship('Venta', back_populates='cliente', lazy=True)
+    pagos = db.relationship('Pago', back_populates='cliente', lazy=True)
     personas_autorizadas = db.relationship('PersonaAutorizada', back_populates='cliente', lazy=True)
 
     def serialize(self):
@@ -32,4 +35,6 @@ class Cliente(db.Model):
             "estado": self.estado.label if self.estado else None,
             "personas_autorizadas": [p.serialize() for p in self.personas_autorizadas],
             "cuenta_corriente_activa": self.cuenta_corriente_activa,
+            "saldo_favor": str(self.saldo_favor or 0),
         }
+
