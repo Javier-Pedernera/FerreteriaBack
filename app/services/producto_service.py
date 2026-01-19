@@ -154,3 +154,10 @@ class ProductoService:
         productos = q.offset((page - 1) * limit).limit(limit).all()
 
         return productos, total
+    
+    @staticmethod
+    def obtener_por_id(product_id: int):
+        producto = db.session.query(Producto).filter(Producto.id == product_id).first()
+        if not producto:
+            raise ValueError(f"Producto con id {product_id} no encontrado")
+        return producto
