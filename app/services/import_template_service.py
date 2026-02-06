@@ -43,12 +43,13 @@ def create_import_template(data):
     return nueva_plantilla
 
 def import_products_from_excel(plantilla_id, cotizacion_dolar, fecha_lista):
-    # Validar cotización
     status_out_of_stock = Status.query.filter_by(code='out of stock').first()
+
     if not cotizacion_dolar or cotizacion_dolar <= 0:
         return {"error": "La cotización del dólar debe ser un número positivo."}
     if not fecha_lista:
         return {"error": "Debe proporcionar la fecha de la lista."}
+
     try:
         fecha_lista_dt = datetime.fromisoformat(fecha_lista)
     except ValueError:
@@ -57,38 +58,30 @@ def import_products_from_excel(plantilla_id, cotizacion_dolar, fecha_lista):
     plantilla = PlantillaImportacion.query.get(plantilla_id)
     if not plantilla:
         return {"error": "No se encontró la plantilla con ese ID."}
+
     plantilla.fecha_ultima_lista = fecha_lista_dt
     nombre_archivo = plantilla.nombre_archivo_excel
-    print("nombre del excel......", nombre_archivo)
     ruta_excel = f'./app/static/uploads/excels/{nombre_archivo}'
-
     extension = nombre_archivo.split('.')[-1].lower()
 
     col_codigo = plantilla.nombre_columna_codigo
     dtype = {col_codigo: str}
 
     try:
-        if extension == 'xls':
-            df = pd.read_excel(ruta_excel, engine='xlrd', skiprows=plantilla.fila_inicio - 1, dtype=dtype)
-        else:
-            df = pd.read_excel(ruta_excel, engine='openpyxl', skiprows=plantilla.fila_inicio - 1, dtype=dtype)
+        engine = 'xlrd' if extension == 'xls' else 'openpyxl'
+        df = pd.read_excel(
+            ruta_excel,
+            engine=engine,
+            skiprows=plantilla.fila_inicio - 1,
+            dtype=dtype
+        )
         df.columns = df.columns.str.strip()
     except Exception as e:
         return {"error": f"Error al cargar el archivo Excel: {str(e)}"}
 
-    print("Columnas encontradas en el Excel:", df.columns.tolist())
-
     proveedor = Proveedor.query.get(plantilla.proveedor_id)
     if not proveedor:
         return {"error": "Proveedor no encontrado."}
-
-    nombre_proveedor = proveedor.nombre.strip().lower().replace(" ", "")
-    nombre_archivo_simple = nombre_archivo.strip().lower().replace(" ", "")
-
-    if nombre_proveedor not in nombre_archivo_simple:
-        return {
-            "error": f"El nombre del archivo '{nombre_archivo}' no parece corresponder al proveedor '{proveedor.nombre}'. Verifique que esté usando el archivo correcto."
-        }
 
     codigo_proveedor = proveedor.codigo_proveedor
     productos_importados = 0
@@ -96,13 +89,13 @@ def import_products_from_excel(plantilla_id, cotizacion_dolar, fecha_lista):
 
     for index, row in df.iterrows():
         try:
-            col_codigo = plantilla.nombre_columna_codigo
             if col_codigo not in df.columns:
                 return {"error": f"La columna '{col_codigo}' no existe en el archivo Excel."}
 
             codigo_producto = row[col_codigo]
-            if pd.isna(codigo_producto) or str(codigo_producto).strip() == "":
+            if pd.isna(codigo_producto) or not str(codigo_producto).strip():
                 continue
+
             codigo_str = str(codigo_producto).strip()
             if plantilla.cod_solo_numero and not codigo_str.isdigit():
                 continue
@@ -118,190 +111,162 @@ def import_products_from_excel(plantilla_id, cotizacion_dolar, fecha_lista):
                     precio_ars = precio_ars.replace('$', '')
                 if plantilla.usa_miles_con_punto:
                     precio_ars = precio_ars.replace('.', '')
-                precio_ars = precio_ars.replace(',', '.') if plantilla.delimitador_decimal == ',' else precio_ars
+                if plantilla.delimitador_decimal == ',':
+                    precio_ars = precio_ars.replace(',', '.')
 
             try:
                 precio_ars = round(float(precio_ars), 2)
             except ValueError:
                 continue
 
-            # 🔹 APLICAR IVA SI ES NECESARIO
             if not proveedor.precio_con_iva:
                 precio_ars = round(precio_ars * 1.21, 2)
 
             precio_usd = round(precio_ars / cotizacion_dolar, 2)
-            
+
             nombre = None
-            if plantilla.nombre_columna_nombre and plantilla.nombre_columna_nombre in df.columns:
-                nombre = row.get(plantilla.nombre_columna_nombre)
-                if pd.isna(nombre) or str(nombre).strip() == "":
-                    nombre = None
-
-            if not nombre:
-                nombre = row.get(plantilla.nombre_columna_descripcion, "")
-                if pd.isna(nombre) or str(nombre).strip() == "":
-                    nombre = None
-
-            precio_sugerido = row.get(plantilla.nombre_columna_precio_sugerido) if plantilla.nombre_columna_precio_sugerido else None
-
-            marca = None
-            if plantilla.nombre_columna_marca:
-                marca_nombre = row.get(plantilla.nombre_columna_marca)
-                if pd.isna(marca_nombre) or str(marca_nombre).strip() == "":
-                    marca = None
-                else:
-                    marca = Marca.query.filter_by(nombre=marca_nombre).first()
-                    if not marca:
-                        marca = Marca(nombre=marca_nombre)
-                        db.session.add(marca)
-                        db.session.commit()
-
-            categoria = None
-            if plantilla.nombre_columna_categoria:
-                categoria_nombre = row.get(plantilla.nombre_columna_categoria)
-
-                # Ignorar si viene NaN, None o vacío
-                if categoria_nombre and str(categoria_nombre).strip().lower() != 'nan':
-                    categoria = Categoria.query.filter_by(nombre=str(categoria_nombre).strip()).first()
+            if plantilla.nombre_columna_nombre in df.columns:
+                val = row.get(plantilla.nombre_columna_nombre)
+                if val and str(val).strip():
+                    nombre = val
 
             descripcion = None
-            if plantilla.nombre_columna_descripcion and plantilla.nombre_columna_descripcion in df.columns:
-                descripcion_valor = row.get(plantilla.nombre_columna_descripcion)
-                if not pd.isna(descripcion_valor) and str(descripcion_valor).strip() != "":
-                    descripcion = str(descripcion_valor).strip()
+            if plantilla.nombre_columna_descripcion in df.columns:
+                val = row.get(plantilla.nombre_columna_descripcion)
+                if val and str(val).strip():
+                    descripcion = val
 
-            # Campos nuevos
             nombre_corto = None
-            if plantilla.nombre_columna_nombre_corto and plantilla.nombre_columna_nombre_corto in df.columns:
-                nombre_corto = row.get(plantilla.nombre_columna_nombre_corto)
-                if pd.isna(nombre_corto) or str(nombre_corto).strip() == "":
-                    nombre_corto = None
+            actualizar_nombre_corto = False
+            if plantilla.nombre_columna_nombre_corto in df.columns:
+                val = row.get(plantilla.nombre_columna_nombre_corto)
+                if val and str(val).strip():
+                    nombre_corto = val
+                    actualizar_nombre_corto = True
 
             ubicacion_local = None
-            if plantilla.nombre_columna_ubicacion and plantilla.nombre_columna_ubicacion in df.columns:
-                ubicacion_local = row.get(plantilla.nombre_columna_ubicacion)
-                if pd.isna(ubicacion_local) or str(ubicacion_local).strip() == "":
-                    ubicacion_local = None
+            actualizar_ubicacion = False
+            if plantilla.nombre_columna_ubicacion in df.columns:
+                val = row.get(plantilla.nombre_columna_ubicacion)
+                if val and str(val).strip():
+                    ubicacion_local = val
+                    actualizar_ubicacion = True
 
             unidad_medida_id = None
-            if plantilla.nombre_columna_unidad_medida and plantilla.nombre_columna_unidad_medida in df.columns:
-                unidad_nombre = row.get(plantilla.nombre_columna_unidad_medida)
-                if not pd.isna(unidad_nombre) and str(unidad_nombre).strip():
-                    unidad = UnidadMedida.query.filter_by(codigo=str(unidad_nombre).strip()).first()
-                    # print(unidad)
+            actualizar_unidad = False
+            if plantilla.nombre_columna_unidad_medida in df.columns:
+                val = row.get(plantilla.nombre_columna_unidad_medida)
+                if val and str(val).strip():
+                    unidad = UnidadMedida.query.filter_by(
+                        codigo=str(val).strip()
+                    ).first()
                     if unidad:
                         unidad_medida_id = unidad.id
+                        actualizar_unidad = True
 
             presentacion_cantidad = None
-            if plantilla.nombre_columna_presentacion and plantilla.nombre_columna_presentacion in df.columns:
-                valor = row.get(plantilla.nombre_columna_presentacion)
-                if valor is not None and str(valor).strip().lower() != "nan":
+            actualizar_presentacion = False
+            if plantilla.nombre_columna_presentacion in df.columns:
+                val = row.get(plantilla.nombre_columna_presentacion)
+                if val and str(val).strip().lower() != "nan":
                     try:
-                        presentacion_cantidad = float(str(valor).replace(",", "."))
+                        presentacion_cantidad = float(str(val).replace(",", "."))
+                        actualizar_presentacion = True
                     except ValueError:
-                        presentacion_cantidad = None
+                        pass
 
             es_fraccionable = None
-            if plantilla.nombre_columna_es_fraccionable and plantilla.nombre_columna_es_fraccionable in df.columns:
+            actualizar_es_fraccionable = False
+            if plantilla.nombre_columna_es_fraccionable in df.columns:
                 val = row.get(plantilla.nombre_columna_es_fraccionable)
-                if val is not None and str(val).strip().lower() != "nan":
-                    es_fraccionable = str(val).strip().lower() in ["1", "sí", "si", "true"]
+                if val and str(val).strip().lower() != "nan":
+                    es_fraccionable = str(val).strip().lower() in ["1", "si", "sí", "true"]
+                    actualizar_es_fraccionable = True
 
-            porcentaje_ganancia = proveedor.porcentaje_ganancia
-            if plantilla.nombre_columna_porcentaje_ganancia and plantilla.nombre_columna_porcentaje_ganancia in df.columns:
-                raw = row.get(plantilla.nombre_columna_porcentaje_ganancia)
-                if raw is not None and str(raw).strip().lower() != "nan":
+            porcentaje_ganancia = None
+            actualizar_pg = False
+            if plantilla.nombre_columna_porcentaje_ganancia in df.columns:
+                val = row.get(plantilla.nombre_columna_porcentaje_ganancia)
+                if val and str(val).strip().lower() != "nan":
                     try:
-                        porcentaje_ganancia = float(str(raw).replace(",", "."))
+                        porcentaje_ganancia = float(str(val).replace(",", "."))
+                        actualizar_pg = True
                     except ValueError:
-                        porcentaje_ganancia = proveedor.porcentaje_ganancia
+                        pass
 
-            porcentaje_ganancia_personalizado = False
-            if plantilla.nombre_columna_pg_personalizado and plantilla.nombre_columna_pg_personalizado in df.columns:
+            porcentaje_ganancia_personalizado = None
+            actualizar_pg_personalizado = False
+            if plantilla.nombre_columna_pg_personalizado in df.columns:
                 val = row.get(plantilla.nombre_columna_pg_personalizado)
-                if val is not None and str(val).strip().lower() != "nan":
-                    porcentaje_ganancia_personalizado = str(val).strip().lower() in ["1", "sí", "si", "true"]
-            producto_existente = Producto.query.filter_by(cod_interno=f"{codigo_proveedor}-{codigo_str}").first()
+                if val and str(val).strip().lower() != "nan":
+                    porcentaje_ganancia_personalizado = str(val).strip().lower() in ["1", "si", "sí", "true"]
+                    actualizar_pg_personalizado = True
+
+            producto_existente = Producto.query.filter_by(
+                cod_interno=f"{codigo_proveedor}-{codigo_str}"
+            ).first()
 
             if producto_existente:
                 producto_existente.precio_ars = precio_ars
                 producto_existente.precio_usd = precio_usd
-                producto_existente.precio_sugerido = precio_sugerido
 
-                # 🔹 Campos que solo se actualizan si el nuevo valor no es None
-                if marca:
-                    producto_existente.marca_id = marca.id
-                if categoria:
-                    producto_existente.categoria_id = categoria.id
-                if nombre is not None:
+                if nombre:
                     producto_existente.nombre = nombre
-                if descripcion is not None:
+                if descripcion:
                     producto_existente.descripcion = descripcion
-                if nombre_corto is not None:
+                if actualizar_nombre_corto:
                     producto_existente.nombre_corto = nombre_corto
-                if ubicacion_local is not None:
+                if actualizar_ubicacion:
                     producto_existente.ubicacion_local = ubicacion_local
-                if unidad_medida_id is not None:
+                if actualizar_unidad:
                     producto_existente.unidad_medida_id = unidad_medida_id
-                if presentacion_cantidad is not None:
+                if actualizar_presentacion:
                     producto_existente.presentacion_cantidad = presentacion_cantidad
-                if es_fraccionable is not None:
+                if actualizar_es_fraccionable:
                     producto_existente.es_fraccionable = es_fraccionable
-                if porcentaje_ganancia is not None:
+                if actualizar_pg:
                     producto_existente.porcentaje_ganancia = porcentaje_ganancia
-                if porcentaje_ganancia_personalizado is not None:
+                if actualizar_pg_personalizado:
                     producto_existente.porcentaje_ganancia_personalizado = porcentaje_ganancia_personalizado
+
                 if status_out_of_stock:
                     producto_existente.status_id = status_out_of_stock.id
 
                 db.session.flush()
-                db.session.refresh(producto_existente)
-
                 producto_existente.precio_final = producto_existente.calcular_precio_final()
+
             else:
                 producto = Producto(
                     cod_interno=f"{codigo_proveedor}-{codigo_str}",
                     cod_proveedor=codigo_proveedor,
                     nombre=nombre,
-                    nombre_corto=nombre_corto,
+                    descripcion=descripcion,
                     precio_ars=precio_ars,
                     precio_usd=precio_usd,
-                    precio_sugerido=precio_sugerido,
                     proveedor_id=proveedor.id,
-                    categoria_id=categoria.id if categoria else None,
                     status_id=status_out_of_stock.id if status_out_of_stock else None,
-                    marca_id=marca.id if marca else None,
-                    descripcion=descripcion,
-                    disponibles=0,
-                    ubicacion_local=ubicacion_local,
-                    unidad_medida_id=unidad_medida_id,
-                    presentacion_cantidad=presentacion_cantidad,
-                    es_fraccionable=es_fraccionable,
-                    porcentaje_ganancia=porcentaje_ganancia,
-                    porcentaje_ganancia_personalizado=porcentaje_ganancia_personalizado,
+                    porcentaje_ganancia=porcentaje_ganancia if actualizar_pg else proveedor.porcentaje_ganancia,
+                    porcentaje_ganancia_personalizado=porcentaje_ganancia_personalizado if actualizar_pg_personalizado else False
                 )
-                # producto.precio_final = producto.calcular_precio_final()
                 db.session.add(producto)
                 db.session.flush()
                 producto.precio_final = producto.calcular_precio_final()
+
             productos_importados += 1
+
         except Exception as e:
-            print(f"Error en fila {index + plantilla.fila_inicio}: {str(e)}")
-            print("Contenido de la fila:", row.to_dict())
-            errores.append(f"Error en la fila {index + plantilla.fila_inicio}: {str(e)}")
-            continue
+            errores.append(f"Fila {index + plantilla.fila_inicio}: {str(e)}")
 
     try:
         db.session.commit()
     except SQLAlchemyError as e:
         db.session.rollback()
-        return {"error": f"Error al guardar en base de datos: {str(e)}"}
+        return {"error": str(e)}
 
     return {
         "processed_count": productos_importados,
         "errors": errores
     }
-
 
 def get_all_import_templates():
     return PlantillaImportacion.query.order_by(asc(PlantillaImportacion.nombre_archivo_excel)).all()
