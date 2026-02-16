@@ -9,7 +9,7 @@ class DetalleVenta(db.Model):
     precio_costo = db.Column(db.Numeric(12, 2), nullable=True)
     cantidad = db.Column(db.Numeric(10, 3), nullable=False)
     precio_unitario = db.Column(db.Numeric(12, 2), nullable=False)
-
+    porcentaje_ganancia_aplicado = db.Column(db.Float, nullable=True)
     venta = db.relationship('Venta', back_populates='detalles', lazy=True)
     producto = db.relationship('Producto', back_populates='detalles_venta', lazy=True)
 
@@ -21,6 +21,7 @@ class DetalleVenta(db.Model):
         "producto": getattr(producto, "nombre", None),
         "cod_interno": getattr(producto, "cod_interno", None),
         "precio_costo": str(self.precio_costo),
+        
         "presentacion_cantidad": getattr(producto, "presentacion_cantidad", None),
         "unidad_medida": producto.unidad_medida.codigo if producto and producto.unidad_medida else None,
         "disponibles": getattr(producto, "disponibles", None),

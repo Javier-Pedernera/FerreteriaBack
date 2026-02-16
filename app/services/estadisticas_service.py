@@ -318,7 +318,11 @@ class EstadisticasService:
                 func.sum(
                     DetalleVenta.cantidad *
                     (DetalleVenta.precio_unitario - DetalleVenta.precio_costo)
-                ).label('ganancia_neta')
+                ).label('ganancia_neta'),
+                # ✅ NUEVO
+                func.avg(
+                    DetalleVenta.porcentaje_ganancia_aplicado
+                ).label('markup_promedio')
             )
             .join(DetalleVenta, DetalleVenta.venta_id == Venta.id)
             .join(Status, Status.id == Venta.estado_id)
@@ -340,7 +344,12 @@ class EstadisticasService:
                     round((r.ganancia_neta / r.total_ventas) * 100, 2)
                     if r.total_ventas and r.total_ventas > 0
                     else 0
-                )
+                ),
+                "markupPromedio": (
+                    round(float(r.markup_promedio), 2)
+                    if r.markup_promedio is not None
+                    else None
+                ),
             }
             for r in resultados
         ]

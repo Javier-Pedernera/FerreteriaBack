@@ -44,13 +44,20 @@ class VentaService:
                 )
             else:
                 precio_costo_unitario = Decimal(producto.precio_ars)
+            precio_unitario = Decimal(item['precio_unitario'])
 
+            porcentaje = None
+            if precio_costo_unitario and precio_costo_unitario > 0:
+                porcentaje = float(
+                    ((precio_unitario - precio_costo_unitario) / precio_costo_unitario) * 100
+                )
             detalle = DetalleVenta(
                 venta_id=venta.id,
                 producto_id=item['producto_id'],
                 cantidad=int(item['cantidad']),
                 precio_unitario=Decimal(item['precio_unitario']),
-                precio_costo=precio_costo_unitario
+                precio_costo=precio_costo_unitario,
+                porcentaje_ganancia_aplicado=porcentaje
             )
 
             db.session.add(detalle)
