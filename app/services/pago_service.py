@@ -80,11 +80,14 @@ class PagoService:
         )
         db.session.add(pago)
 
-        # 2️⃣ Ventas pendientes
+        # 2️⃣ Ventas activas pendientes
+        estado_deleted = StatusService.get_status_by_code("deleted")
+
         ventas_pendientes = (
             Venta.query
             .filter_by(cliente_id=cliente_id)
             .filter(Venta.pagado < Venta.total)
+            .filter(Venta.estado_id != estado_deleted.id)
             .order_by(Venta.fecha_venta)
             .all()
         )
@@ -114,7 +117,7 @@ class PagoService:
 
         # 4️⃣ Saldo a favor
         if restante > 0:
-            cliente.saldo_favor += restante
+            cliente.saldo_favor = (cliente.saldo_favor or Decimal("0")) + restante
 
         db.session.commit()
 

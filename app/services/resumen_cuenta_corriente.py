@@ -30,13 +30,17 @@ class ResumenCuentaCorrienteService:
         if fecha_desde > fecha_hasta:
             raise ValueError("'desde' no puede ser mayor que 'hasta'")
 
-        # 🔎 Query base
+       # 🔎 Query base
         query = (
             Venta.query
             .filter(Venta.cliente_id == cliente_id)
             .filter(Venta.fecha_venta >= fecha_desde)
             .filter(Venta.fecha_venta <= fecha_hasta)
         )
+
+        estado_deleted = StatusService.get_status_by_code("deleted")
+        if estado_deleted:
+            query = query.filter(Venta.estado_id != estado_deleted.id)
 
         # 🧾 Filtro opcional por cuenta corriente
         if solo_cuenta_corriente:

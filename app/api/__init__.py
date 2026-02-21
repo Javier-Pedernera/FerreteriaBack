@@ -1,6 +1,6 @@
 from flask import Flask
 
-from app.api import estadisticas_api
+from .facturacion_api import facturacion_api
 from .productos_api import producto_api
 from .proveedor_api import api_proveedor
 # from .auth_api import auth_api
@@ -40,5 +40,6 @@ def register_blueprints(app):
     app.register_blueprint(estadisticas_bp, url_prefix='/api/estadisticas')
     app.register_blueprint(cuentas_api, url_prefix='/api/cuentas')
     app.register_blueprint(pago_api, url_prefix='/api/pagos')
+    app.register_blueprint(facturacion_api, url_prefix="/api")
     # app.register_blueprint(auth_api, url_prefix='/api')
     # app.register_blueprint(status_api, url_prefix='/api')

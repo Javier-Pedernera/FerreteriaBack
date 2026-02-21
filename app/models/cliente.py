@@ -17,6 +17,12 @@ class Cliente(db.Model):
     cuenta_corriente_activa = db.Column(db.Boolean, default=False)
     saldo_favor = db.Column(db.Numeric(12,2), default=Decimal(0))
     
+    condicion_iva_id = db.Column(
+        db.Integer,
+        db.ForeignKey("condiciones_iva.id"),
+        nullable=True
+    )
+    condicion_iva = db.relationship("CondicionIVA", lazy=True)
     estado = db.relationship('Status', lazy=True)
     ventas = db.relationship('Venta', back_populates='cliente', lazy=True)
     pagos = db.relationship('Pago', back_populates='cliente', lazy=True)
@@ -36,5 +42,8 @@ class Cliente(db.Model):
             "personas_autorizadas": [p.serialize() for p in self.personas_autorizadas],
             "cuenta_corriente_activa": self.cuenta_corriente_activa,
             "saldo_favor": str(self.saldo_favor or 0),
+
+            # ✅ NUEVO
+            "condicion_iva": self.condicion_iva.codigo if self.condicion_iva else None
         }
 

@@ -115,6 +115,11 @@ class ClienteService:
         # Ventas
         # -------------------
         ventas_q = Venta.query.filter_by(cliente_id=cliente_id)
+
+        estado_deleted = StatusService.get_status_by_code("deleted")
+        if estado_deleted:
+            ventas_q = ventas_q.filter(Venta.estado_id != estado_deleted.id)
+
         if desde_dt and hasta_dt:
             print(Venta.fecha_venta )
             print(hasta_dt )
@@ -191,6 +196,11 @@ class ClienteService:
         # Ventas
         # -------------------
         ventas_q = cliente.ventas
+
+        estado_deleted = StatusService.get_status_by_code("deleted")
+        if estado_deleted:
+            ventas_q = [v for v in ventas_q if v.estado_id != estado_deleted.id]
+
         if desde_dt and hasta_dt:
             ventas_q = [
                 v for v in ventas_q
@@ -270,14 +280,19 @@ class ClienteService:
         if not estado_on_account:
             raise Exception("Estado 'on_account' no encontrado")
 
+        estado_deleted = StatusService.get_status_by_code("deleted")
+
         ventas = (
             Venta.query
             .filter(Venta.cliente_id == cliente_id)
             .filter(Venta.estado_id == estado_on_account.id)
             .filter(Venta.fecha_venta <= fecha_hasta)
-            .order_by(Venta.fecha_venta.asc())
-            .all()
         )
+
+        if estado_deleted:
+            ventas = ventas.filter(Venta.estado_id != estado_deleted.id)
+
+        ventas = ventas.order_by(Venta.fecha_venta.asc()).all()
 
         productos_map = {}
         total_consumido = Decimal("0")

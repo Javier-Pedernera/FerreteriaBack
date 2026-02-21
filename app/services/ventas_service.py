@@ -68,8 +68,13 @@ class VentaService:
     @staticmethod
     def obtener_por_id(venta_id):
         venta = Venta.query.get(venta_id)
+
         if not venta:
             raise ValueError("Venta no encontrada")
+
+        if venta.estado and venta.estado.code == 'deleted':
+            raise ValueError("Venta no encontrada")
+
         return venta.serialize()
 
     @staticmethod
@@ -85,11 +90,14 @@ class VentaService:
             for v in query.order_by(Venta.fecha_venta.desc()).all()
         ]
 
-    @staticmethod
     def actualizar(venta_id, data):
         venta = Venta.query.get(venta_id)
+
         if not venta:
             raise ValueError("Venta no encontrada")
+
+        if venta.estado and venta.estado.code == 'deleted':
+            raise ValueError("No se puede actualizar una venta eliminada")
 
         venta.descuento = data.get('descuento', venta.descuento)
         venta.total = data.get('total', venta.total)
@@ -122,11 +130,17 @@ class VentaService:
 
         estado_en_cuenta = Status.query.filter_by(code='on_account').first()
         estado_pagado = Status.query.filter_by(code='paid').first()
+        estado_deleted = Status.query.filter_by(code='deleted').first()
 
         if not estado_en_cuenta or not estado_pagado:
             raise ValueError("Estados necesarios no encontrados.")
 
-        ventas = Venta.query.filter_by(cliente_id=cliente_id, estado_id=estado_en_cuenta.id).order_by(Venta.fecha_venta).all()
+        ventas = Venta.query.filter_by(
+            cliente_id=cliente_id,
+            estado_id=estado_en_cuenta.id
+        ).filter(
+            Venta.estado_id != estado_deleted.id
+        ).order_by(Venta.fecha_venta).all()
 
         resultado = []
 
@@ -213,6 +227,10 @@ class VentaService:
     def actualizar_venta(venta_id: int, data: dict) -> Venta:
         venta = Venta.query.get_or_404(venta_id)
 
+        # 🚫 Bloquear si está eliminada
+        if venta.estado and venta.estado.code == 'deleted':
+            raise ValueError("No se puede actualizar una venta eliminada")
+
         # Actualiza campos principales
         venta.cliente_id = data.get('cliente_id', venta.cliente_id)
         venta.total = Decimal(data.get('total', venta.total))
@@ -235,7 +253,7 @@ class VentaService:
             if not venta.fecha_pago:
                 venta.fecha_pago = datetime.now()
 
-        # Manejo de detalles (igual que antes)
+        # Manejo de detalles
         nuevos_detalles = data.get('detalles', [])
         existentes_map = {d.producto_id: d for d in venta.detalles}
         nuevos_ids = {d['producto_id'] for d in nuevos_detalles}
@@ -287,6 +305,11 @@ class VentaService:
         descuento_aplicado=0
     ):
         venta = Venta.query.get_or_404(venta_id)
+
+        # 🚫 NO operar si está eliminada
+        if venta.estado and venta.estado.code == 'deleted':
+            raise ValueError("No se puede cobrar una venta eliminada")
+
         forma_pago = FormaPago.query.get_or_404(forma_pago_id)
 
         total_ajustado = Decimal(venta.total) * (Decimal("1") - Decimal(descuento_aplicado) / Decimal("100"))
@@ -302,7 +325,6 @@ class VentaService:
             venta.pagado = Decimal(monto_abonado)
             estado_code = 'charged'
 
-        # 🔥 ESTA LÍNEA ES LA CLAVE 🔥
         venta.actualizar_saldo()
 
         venta.forma_pago_id = forma_pago_id

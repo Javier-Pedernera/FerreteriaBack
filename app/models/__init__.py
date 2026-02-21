@@ -18,3 +18,7 @@ from .cuentas import Cuenta
 from .movimiento_cuenta import MovimientoCuenta
 from .pago import Pago
 from .resumen_cuenta_corriente import ResumenCuentaCorriente
+from .factura import Factura
+from .factura_item import FacturaItem
+from app.models.venta import Venta
+from .condicion_iva import CondicionIVA
