@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+body {
+    font-family: Arial, sans-serif;
+    font-size: 12px;
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    border-bottom: 2px solid black;
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+}
+
+.logo {
+    width: 150px;
+}
+
+.tipo {
+    font-size: 28px;
+    font-weight: bold;
+}
+
+.numero {
+    font-size: 16px;
+    margin-top: 5px;
+}
+
+.section {
+    margin-bottom: 15px;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+th, td {
+    border: 1px solid #000;
+    padding: 5px;
+    text-align: left;
+}
+
+.total {
+    text-align: right;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+.cae-box {
+    margin-top: 20px;
+    border: 1px solid black;
+    padding: 10px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="header">
+    <div>
+        <img src="{{ url_for('static', filename='logo.png') }}" class="logo">
+        <p><strong>{{ factura.empresa_nombre }}</strong></p>
+        <p>CUIT: {{ factura.empresa_cuit }}</p>
+        <p>Condición IVA: {{ factura.empresa_iva }}</p>
+    </div>
+
+    <div style="text-align:right;">
+        <div class="tipo">{{ factura.tipo_descripcion }}</div>
+        <div class="numero">N° {{ numero_formateado }}</div>
+        <p>Fecha: {{ fecha }}</p>
+    </div>
+</div>
+
+<div class="section">
+    <strong>Cliente:</strong> {{ factura.cliente_nombre }}<br>
+    <strong>CUIT:</strong> {{ factura.cliente_cuit }}<br>
+    <strong>Condición IVA:</strong> {{ factura.cliente_iva }}
+</div>
+
+<div class="section">
+    <table>
+        <tr>
+            <th>Concepto</th>
+            <th>Importe</th>
+        </tr>
+        <tr>
+            <td>Servicios prestados</td>
+            <td>${{ factura.importe_total }}</td>
+        </tr>
+    </table>
+</div>
+
+<div class="total">
+    TOTAL: ${{ factura.importe_total }}
+</div>
+
+<div class="cae-box">
+    <strong>CAE:</strong> {{ factura.cae }}<br>
+    <strong>Vencimiento CAE:</strong> {{ factura.vto_cae }}
+</div>
+
+</body>
+</html>

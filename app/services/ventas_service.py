@@ -251,7 +251,7 @@ class VentaService:
             if estado_pagada:
                 venta.estado_id = estado_pagada.id
             if not venta.fecha_pago:
-                venta.fecha_pago = datetime.now()
+                venta.fecha_pago = datetime.now(timezone.utc)
 
         # Manejo de detalles
         nuevos_detalles = data.get('detalles', [])

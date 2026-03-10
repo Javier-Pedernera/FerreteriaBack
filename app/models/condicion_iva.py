@@ -7,10 +7,12 @@ class CondicionIVA(db.Model):
 
     codigo = db.Column(db.String(30), unique=True, nullable=False)
     descripcion = db.Column(db.String(100), nullable=False)
-
+    codigo_afip = db.Column(db.Integer, nullable=True) 
+    
     def serialize(self):
         return {
             "id": self.id,
             "codigo": self.codigo,
-            "descripcion": self.descripcion
+            "descripcion": self.descripcion,
+            "codigo_afip": self.codigo_afip
         }

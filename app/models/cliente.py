@@ -17,6 +17,16 @@ class Cliente(db.Model):
     cuenta_corriente_activa = db.Column(db.Boolean, default=False)
     saldo_favor = db.Column(db.Numeric(12,2), default=Decimal(0))
     
+    tipo_documento_id = db.Column(
+    db.Integer,
+    db.ForeignKey("tipos_documento.id"),
+    nullable=True
+    )
+
+    tipo_documento = db.relationship(
+        "TipoDocumento",
+        back_populates="clientes"
+    )
     condicion_iva_id = db.Column(
         db.Integer,
         db.ForeignKey("condiciones_iva.id"),
@@ -34,6 +44,8 @@ class Cliente(db.Model):
             "nombre": self.nombre,
             "razon_social": self.razon_social,
             "cuit": self.cuit,
+            "tipo_doc": self.tipo_documento.codigo_afip if self.tipo_documento else None,
+            "tipo_doc_descripcion": self.tipo_documento.descripcion if self.tipo_documento else None,
             "email": self.email,
             "telefono": self.telefono,
             "direccion": self.direccion,

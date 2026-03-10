@@ -8,23 +8,27 @@ class EmpresaFiscalConfig(db.Model):
     razon_social = db.Column(db.String(150), nullable=False)
     cuit = db.Column(db.String(20), nullable=False, unique=True)
 
-    punto_venta = db.Column(db.Integer, nullable=False)
+    puntos_venta = db.relationship(
+        "PuntoVenta",
+        backref="empresa_config",
+        lazy=True,
+        cascade="all, delete-orphan"
+    )
 
     condicion_iva_id = db.Column(
         db.Integer,
         db.ForeignKey("condiciones_iva.id"),
         nullable=False
     )
-    # responsable_inscripto
-    # monotributo
-    # exento
-    # etc
 
-    cert_path = db.Column(db.String(255), nullable=True)
-    key_path = db.Column(db.String(255), nullable=True)
+    condicion_iva = db.relationship("CondicionIVA")
+
+    cert_path = db.Column(db.String(255), nullable=False)
+
+    # 🔴 ESTA ES LA NUEVA COLUMNA
+    pfx_password = db.Column(db.String(255), nullable=True)
 
     ambiente = db.Column(db.String(20), default="testing")
-    # testing | produccion
 
     activo = db.Column(db.Boolean, default=True)
 
@@ -33,7 +37,7 @@ class EmpresaFiscalConfig(db.Model):
             "id": self.id,
             "razon_social": self.razon_social,
             "cuit": self.cuit,
-            "punto_venta": self.punto_venta,
+            "puntos_venta": [pv.serialize() for pv in self.puntos_venta],
             "condicion_iva": self.condicion_iva.codigo if self.condicion_iva else None,
             "ambiente": self.ambiente,
             "activo": self.activo

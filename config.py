@@ -15,6 +15,22 @@ class Config:
     CLOUDINARY_CLOUD_NAME = os.getenv("CLOUDINARY_CLOUD_NAME")
     CLOUDINARY_API_KEY = os.getenv("CLOUDINARY_API_KEY")
     CLOUDINARY_API_SECRET = os.getenv("CLOUDINARY_API_SECRET")
+    
+# ARCA (ex AFIP)
+    ARCA_ENV = os.getenv("ARCA_ENV", "test")
+    # print("Arca en el .env", ARCA_ENV)
+    if ARCA_ENV == "prod":
+        ARCA_PFX_PATH = os.getenv("ARCA_PFX_PROD")
+        ARCA_PFX_PASSWORD = os.getenv("ARCA_PFX_PROD_PASSWORD")
+        ARCA_WSAA_URL = "https://wsaa.afip.gov.ar/ws/services/LoginCms"
+        ARCA_WSFE_URL = "https://servicios1.afip.gov.ar/wsfev1/service.asmx"
+    else:
+        ARCA_PFX_PATH = os.getenv("ARCA_PFX_TEST")
+        ARCA_PFX_PASSWORD = os.getenv("ARCA_PFX_TEST_PASSWORD")
+        ARCA_WSAA_URL = "https://wsaahomo.afip.gov.ar/ws/services/LoginCms"
+        ARCA_WSFE_URL = "https://wswhomo.afip.gov.ar/wsfev1/service.asmx"
+    
+    ARCA_CUIT = os.getenv("ARCA_CUIT")
 
     @staticmethod
     def configure_cloudinary():

@@ -31,24 +31,24 @@ class PedidoProveedor(db.Model):
         return float(total_sin_descuento) - (float(total_sin_descuento) * (float(self.descuento) / 100))
 
     def actualizar_stock(self):
-        print(f"Actualizando stock para pedido ID: {self.id}")
+        # print(f"Actualizando stock para pedido ID: {self.id}")
 
         detalles = self.detalles
         print(f"Cantidad de detalles en el pedido: {len(detalles)}")
 
         for detalle in detalles:
-            print(f"Detalle ID: {detalle.id}")
-            print(f" - Producto ID: {detalle.producto_id}")
-            print(f" - Cantidad en detalle: {getattr(detalle, 'cantidad', 'No existe')}")
-            print(f" - Unidades por presentación: {getattr(detalle, 'unidades_por_presentacion', 'No existe')}")
+            # print(f"Detalle ID: {detalle.id}")
+            # print(f" - Producto ID: {detalle.producto_id}")
+            # print(f" - Cantidad en detalle: {getattr(detalle, 'cantidad', 'No existe')}")
+            # print(f" - Unidades por presentación: {getattr(detalle, 'unidades_por_presentacion', 'No existe')}")
 
             producto = getattr(detalle, 'producto', None)
             if not producto:
-                print(" - Producto no cargado o no existe")
+                # print(" - Producto no cargado o no existe")
                 continue
 
-            print(f" - Producto nombre: {producto.nombre}")
-            print(f" - Stock actual: {producto.disponibles}")
+            # print(f" - Producto nombre: {producto.nombre}")
+            # print(f" - Stock actual: {producto.disponibles}")
 
             try:
                 unidades = detalle.cantidad * (detalle.unidades_por_presentacion or 1)

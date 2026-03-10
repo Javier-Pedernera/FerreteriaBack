@@ -20,5 +20,10 @@ from .pago import Pago
 from .resumen_cuenta_corriente import ResumenCuentaCorriente
 from .factura import Factura
 from .factura_item import FacturaItem
-from app.models.venta import Venta
+from .venta import Venta
 from .condicion_iva import CondicionIVA
+from .arca_token import ArcaToken
+from .empresa_fiscal_config import EmpresaFiscalConfig
+from .tipo_comprobante import TipoComprobante
+from .tipo_documento import TipoDocumento
+from .punto_venta import PuntoVenta

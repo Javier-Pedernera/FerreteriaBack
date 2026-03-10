@@ -21,7 +21,7 @@ def obtener_pedido(pedido_id):
 @pedido_bp.route("/pedidos-proveedores", methods=["POST"])
 def crear_pedido():
     data = request.get_json()
-    print(data)
+    # print(data)
     if not data:
         return jsonify({"error": "Datos JSON faltantes o mal formateados"}), 400
 

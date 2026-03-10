@@ -15,7 +15,7 @@ class DetalleVenta(db.Model):
 
     def serialize(self):
         producto = self.producto
-        print(producto)
+        # print(producto)
         return {
         "producto_id": self.producto_id,
         "producto": getattr(producto, "nombre", None),

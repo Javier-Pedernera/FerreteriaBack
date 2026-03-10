@@ -40,4 +40,8 @@ def create_app():
         initialize_formas_pago()
         from app.utils.condiciones_iva_loader import initialize_condiciones_iva
         initialize_condiciones_iva()
+        from app.utils.initialize_tipos_comprobante import initialize_tipos_comprobante
+        initialize_tipos_comprobante()
+        from app.utils.initialize_tipos_documento import initialize_tipos_documento
+        initialize_tipos_documento()
     return app
