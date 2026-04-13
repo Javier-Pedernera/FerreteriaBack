@@ -333,3 +333,77 @@ def consultar_comprobante_arca(cbte_tipo, pto_venta, numero):
             "ok": False,
             "error": str(e)
         }), 500
+        
+@facturacion_api.route("/arca/cae/<string:cae>", methods=["GET"])
+def consultar_por_cae(cae):
+    try:
+
+        empresa = EmpresaFiscalConfig.query.filter_by(activo=True).first()
+        if not empresa:
+            return jsonify({"error": "No hay empresa activa"}), 400
+
+        # 🔹 buscar factura en tu sistema
+        factura = Factura.query.filter_by(arca_cae=cae).first()
+
+        if not factura:
+            return jsonify({
+                "ok": False,
+                "error": "No existe una factura con ese CAE en el sistema"
+            }), 404
+
+        service = ArcaService(empresa)
+        token, sign = service.obtener_token(force_new=True)
+
+        from zeep import Client
+        from zeep.transports import Transport
+        from requests import Session
+
+        session = Session()
+        session.mount("https://", TLSAdapter())
+        transport = Transport(session=session)
+
+        wsdl = Config.ARCA_WSFE_URL + "?WSDL"
+        client = Client(wsdl=wsdl, transport=transport)
+
+        auth = {
+            "Token": token,
+            "Sign": sign,
+            "Cuit": int(empresa.cuit),
+        }
+
+        response = client.service.FECompConsultar(
+            Auth=auth,
+            FeCompConsReq={
+                "CbteTipo": factura.tipo_comprobante.codigo_afip,
+                "PtoVta": factura.punto_venta_emitido,
+                "CbteNro": factura.arca_numero_cbte
+            }
+        )
+
+        if not response.ResultGet:
+            return jsonify({
+                "ok": False,
+                "error": "ARCA no devolvió datos"
+            })
+
+        comp = response.ResultGet
+
+        return jsonify({
+            "ok": True,
+            "arca": {
+                "cae": comp.CodAutorizacion,
+                "fecha": comp.CbteFch,
+                "importe": comp.ImpTotal,
+                "resultado": comp.Resultado,
+                "vto_cae": comp.FchVto,
+                "cliente_tipo": comp.DocTipo,
+                "cliente_nro": comp.DocNro
+            },
+            "sistema": factura.serialize()
+        })
+
+    except Exception as e:
+        return jsonify({
+            "ok": False,
+            "error": str(e)
+        }), 500
