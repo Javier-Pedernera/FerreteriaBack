@@ -3,6 +3,7 @@ from decimal import Decimal
 from operator import and_
 from app import db
 from app.models.forma_pago import FormaPago
+from app.models.movimiento_cliente import MovimientoCliente, TipoMovimientoCliente
 from app.models.venta import Venta
 from app.models.detalle_venta import DetalleVenta
 from app.models.status import Status
@@ -13,9 +14,11 @@ class VentaService:
 
     @staticmethod
     def crear_venta(data):
+
         estado_inicial = Status.query.filter_by(code='in_progress').first()
         if not estado_inicial:
             raise ValueError("No se encontró el estado 'in_progress'")
+
         venta = Venta(
             fecha_venta=datetime.now(timezone.utc),
             total=data['total'],
@@ -23,12 +26,17 @@ class VentaService:
             forma_pago_id=data.get('forma_pago_id'),
             estado_id=estado_inicial.id,
             vendedor_id=data['vendedor_id'],
-            cliente_id=data.get('cliente_id')
+            cliente_id=data.get('cliente_id')  # 👈 sigue igual
         )
-        db.session.add(venta)
-        db.session.flush()  # Necesario para obtener el ID antes del commit
 
+        db.session.add(venta)
+        db.session.flush()  # obtener ID
+
+        # =========================
+        # DETALLES (SIN CAMBIOS)
+        # =========================
         for item in data['detalles']:
+
             producto = Producto.query.get(item['producto_id'])
             if not producto:
                 raise ValueError(f"Producto {item['producto_id']} no encontrado")
@@ -44,25 +52,46 @@ class VentaService:
                 )
             else:
                 precio_costo_unitario = Decimal(producto.precio_ars)
+
             precio_unitario = Decimal(item['precio_unitario'])
 
             porcentaje = None
-            if precio_costo_unitario and precio_costo_unitario > 0:
+            if precio_costo_unitario > 0:
                 porcentaje = float(
                     ((precio_unitario - precio_costo_unitario) / precio_costo_unitario) * 100
                 )
+
             detalle = DetalleVenta(
                 venta_id=venta.id,
                 producto_id=item['producto_id'],
                 cantidad=int(item['cantidad']),
-                precio_unitario=Decimal(item['precio_unitario']),
+                precio_unitario=precio_unitario,
                 precio_costo=precio_costo_unitario,
                 porcentaje_ganancia_aplicado=porcentaje
             )
 
             db.session.add(detalle)
 
+        # =========================
+        # NUEVO SISTEMA (NO ROMPE NADA)
+        # =========================
+        if venta.cliente_id:
+
+            movimiento = MovimientoCliente(
+                cliente_id=venta.cliente_id,
+                tipo=TipoMovimientoCliente.VENTA,
+                monto=Decimal(venta.total),
+                venta_id=venta.id,
+                observaciones="AUTO: venta creada"
+            )
+
+            db.session.add(movimiento)
+
+        # =========================
+        # COMMIT FINAL (igual que antes)
+        # =========================
         db.session.commit()
+
         return venta.serialize()
 
     @staticmethod
@@ -291,9 +320,42 @@ class VentaService:
                 )
                 db.session.add(nuevo_detalle)
 
+        # =========================
+        # 🧠 NUEVO: MOVIMIENTOS CLIENTE (SIN ROMPER NADA)
+        # =========================
+        if venta.cliente_id:
+
+            movimiento_base = MovimientoCliente.query.filter_by(
+                venta_id=venta.id,
+                tipo=TipoMovimientoCliente.VENTA
+            ).first()
+
+            nuevo_total = Decimal(venta.total or 0)
+
+            if movimiento_base:
+                diferencia = nuevo_total - Decimal(movimiento_base.monto or 0)
+
+                if diferencia != 0:
+                    db.session.add(MovimientoCliente(
+                        cliente_id=venta.cliente_id,
+                        tipo=TipoMovimientoCliente.AJUSTE,
+                        monto=diferencia,
+                        venta_id=venta.id,
+                        observaciones="AUTO: ajuste por modificación de venta"
+                    ))
+            else:
+                db.session.add(MovimientoCliente(
+                    cliente_id=venta.cliente_id,
+                    tipo=TipoMovimientoCliente.VENTA,
+                    monto=nuevo_total,
+                    venta_id=venta.id,
+                    observaciones="AUTO: reconstrucción de movimiento"
+                ))
+
         db.session.commit()
         return venta
-    
+
+
     @staticmethod
     def cobrar_venta(
         venta_id,
@@ -343,6 +405,21 @@ class VentaService:
             raise Exception(f"Estado '{estado_code}' no encontrado")
 
         venta.estado_id = nuevo_estado.id
+        # =========================
+        # MOVIMIENTOS CLIENTE (PAGO)
+        # =========================
 
+        if venta.cliente_id:
+
+            if forma_pago.nombre.lower() != 'cuenta corriente':
+
+                db.session.add(MovimientoCliente(
+                    cliente_id=venta.cliente_id,
+                    tipo=TipoMovimientoCliente.PAGO,
+                    monto=Decimal(monto_abonado),
+                    venta_id=venta.id,
+                    observaciones=f"Pago venta #{venta.id}"
+                ))
+                
         db.session.commit()
         return venta.serialize()

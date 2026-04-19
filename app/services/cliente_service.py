@@ -1,12 +1,15 @@
 from datetime import datetime, timedelta
 from decimal import Decimal
 from flask import request
+from sqlalchemy import case, func
 from app import db
 from app.models.cliente import Cliente
 from app.models.pago import Pago
 from app.models.persona_autorizada import PersonaAutorizada
 from app.models.venta import Venta
 from app.services.status_service import StatusService
+from app.models.movimiento_cliente import MovimientoCliente, TipoMovimientoCliente
+from config import Config
 
 def safe_decimal(value):
     return Decimal(value) if value is not None else Decimal("0")
@@ -103,6 +106,9 @@ class ClienteService:
         if not cliente:
             return None
 
+        # -------------------
+        # filtros de fechas
+        # -------------------
         if desde and hasta:
             desde_dt = datetime.strptime(desde, "%Y-%m-%d")
             hasta_dt = datetime.strptime(hasta, "%Y-%m-%d") + timedelta(days=1)
@@ -110,10 +116,16 @@ class ClienteService:
             raise ValueError("Debe enviar 'desde' y 'hasta' juntos")
         else:
             desde_dt = hasta_dt = None
-        print(Venta)
+
         # -------------------
-        # Ventas
+        # FLAG MIGRACIÓN
         # -------------------
+        usar_movimientos = Config.MOVIMIENTOS_CLIENTE_ENABLED
+
+        # =========================================================
+        # 🟡 LEGACY (SISTEMA ACTUAL - NO TOCAR)
+        # =========================================================
+
         ventas_q = Venta.query.filter_by(cliente_id=cliente_id)
 
         estado_deleted = StatusService.get_status_by_code("deleted")
@@ -121,8 +133,6 @@ class ClienteService:
             ventas_q = ventas_q.filter(Venta.estado_id != estado_deleted.id)
 
         if desde_dt and hasta_dt:
-            print(Venta.fecha_venta )
-            print(hasta_dt )
             ventas_q = ventas_q.filter(
                 Venta.fecha_venta >= desde_dt,
                 Venta.fecha_venta <= hasta_dt
@@ -131,11 +141,11 @@ class ClienteService:
         ventas = ventas_q.order_by(Venta.id.desc()).all()
 
         ventas_serializadas = []
-        deuda_total = 0.0
+        deuda_total_legacy = 0.0
 
         for v in ventas:
             saldo = float(v.total) - float(v.pagado)
-            deuda_total += saldo
+            deuda_total_legacy += saldo
 
             ventas_serializadas.append({
                 "id": v.id,
@@ -149,9 +159,40 @@ class ClienteService:
                 "retira": v.persona_autorizada.serialize() if v.persona_autorizada else None
             })
 
+        # =========================================================
+        # 🔵 MOVIMIENTOS (NUEVO SISTEMA - EN PARALELO)
+        # =========================================================
+
+        deuda_total_movimientos = 0.0
+
+        if usar_movimientos:
+            mov_q = MovimientoCliente.query.filter_by(cliente_id=cliente_id)
+
+            if desde_dt and hasta_dt:
+                mov_q = mov_q.filter(
+                    MovimientoCliente.fecha >= desde_dt,
+                    MovimientoCliente.fecha <= hasta_dt
+                )
+
+            movimientos = mov_q.all()
+
+            for m in movimientos:
+                if m.tipo == TipoMovimientoCliente.VENTA:
+                    deuda_total_movimientos += float(m.monto)
+
+                elif m.tipo == TipoMovimientoCliente.PAGO:
+                    deuda_total_movimientos -= float(m.monto)
+
+                elif m.tipo == TipoMovimientoCliente.CREDITO:
+                    deuda_total_movimientos -= float(m.monto)
+
+                elif m.tipo == TipoMovimientoCliente.AJUSTE:
+                    deuda_total_movimientos += float(m.monto)
+
         # -------------------
-        # Pagos
+        # PAGOS (SIN CAMBIOS)
         # -------------------
+
         pagos_q = Pago.query.filter_by(cliente_id=cliente_id)
 
         if desde_dt and hasta_dt:
@@ -163,11 +204,24 @@ class ClienteService:
         pagos = pagos_q.order_by(Pago.id.desc()).all()
         pagos_serializados = [p.serialize() for p in pagos]
 
+        # -------------------
+        # RESPONSE FINAL
+        # -------------------
+
         return {
             "cliente": cliente.serialize(),
             "ventas": ventas_serializadas,
             "pagos": pagos_serializados,
-            "deuda_total": deuda_total,
+
+            # 🟡 SISTEMA ACTUAL (PRODUCCIÓN)
+            "deuda_total": deuda_total_legacy,
+
+            # 🔵 NUEVO SISTEMA (PARALELO)
+            "deuda_total_movimientos": deuda_total_movimientos,
+
+            # 🧠 CONTROL MIGRACIÓN
+            "modo_deuda": "movimientos" if usar_movimientos else "legacy",
+
             "saldo_favor": float(cliente.saldo_favor or 0)
         }
         
@@ -358,3 +412,24 @@ class ClienteService:
             "productos": productos,
             "total_consumido": safe_float(total_consumido),
         }
+        
+        
+    def calcular_deuda_cliente(cliente_id):
+        total = db.session.query(
+            func.coalesce(
+                func.sum(
+                    case(
+                        (MovimientoCliente.tipo == TipoMovimientoCliente.VENTA, MovimientoCliente.monto),
+                        (MovimientoCliente.tipo == TipoMovimientoCliente.PAGO, -MovimientoCliente.monto),
+                        (MovimientoCliente.tipo == TipoMovimientoCliente.CREDITO, -MovimientoCliente.monto),
+                        (MovimientoCliente.tipo == TipoMovimientoCliente.AJUSTE, MovimientoCliente.monto),  # 🔥 clave
+                        else_=0
+                    )
+                ),
+                0
+            )
+        ).filter(
+            MovimientoCliente.cliente_id == cliente_id
+        ).scalar()
+
+        return float(total)

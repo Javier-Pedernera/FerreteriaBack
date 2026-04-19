@@ -1,5 +1,5 @@
 from sqlalchemy import func
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from app import db
 from app.models.status import Status
 from app.models.venta import Venta
@@ -259,6 +259,10 @@ class EstadisticasService:
         if fecha is None:
             fecha = date.today()
 
+        inicio = datetime.combine(fecha, datetime.min.time())
+        fin = inicio + timedelta(days=1)
+
+        # 🔹 INGRESOS
         ingresos = db.session.query(
             func.coalesce(func.sum(Venta.total), 0),
             func.count(Venta.id)
@@ -267,9 +271,11 @@ class EstadisticasService:
         ).filter(
             Venta.fecha_pago.isnot(None),
             Status.code != 'deleted',
-            func.date(Venta.fecha_venta) == fecha
+            Venta.fecha_venta >= inicio,
+            Venta.fecha_venta < fin
         ).one()
 
+        # 🔹 EGRESOS
         total_por_pedido = (
             db.session.query(
                 DetallePedidoProveedor.pedido_id,
@@ -288,8 +294,41 @@ class EstadisticasService:
             total_por_pedido,
             PedidoProveedor.id == total_por_pedido.c.pedido_id
         ).filter(
-            func.date(PedidoProveedor.fecha_pedido) == fecha
+            PedidoProveedor.fecha_pedido >= inicio,
+            PedidoProveedor.fecha_pedido < fin
         ).one()
+
+        # 🔹 COSTO DE VENTAS
+        costo_ventas = db.session.query(
+            func.coalesce(
+                func.sum(
+                    DetalleVenta.cantidad * DetalleVenta.precio_costo
+                ), 0
+            )
+        ).join(
+            Venta, Venta.id == DetalleVenta.venta_id
+        ).join(
+            Status, Status.id == Venta.estado_id
+        ).filter(
+            Venta.fecha_pago.isnot(None),
+            Status.code != 'deleted',
+            Venta.fecha_venta >= inicio,
+            Venta.fecha_venta < fin
+        ).scalar() or 0
+
+        return {
+            "fecha": fecha.isoformat(),
+            "ingresos": {
+                "total": float(ingresos[0]),
+                "cantidad": ingresos[1]
+            },
+            "egresos": {
+                "total": float(egresos[0]),
+                "cantidad": egresos[1]
+            },
+            "costoVentas": float(costo_ventas),
+            "gananciaNeta": float(ingresos[0]) - float(costo_ventas)
+        }
 
         return {
             "fecha": fecha.isoformat(),

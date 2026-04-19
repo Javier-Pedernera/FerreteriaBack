@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from app.models.cliente import Cliente
 from app.models.venta import Venta
 from app.services.status_service import StatusService
+from app.models.movimiento_cliente import MovimientoCliente, TipoMovimientoCliente
 
 class PagoService:
 
@@ -65,13 +66,12 @@ class PagoService:
         monto_ingresado = Decimal(str(monto))
         saldo_favor = Decimal(str(cliente.saldo_favor or 0))
 
-        # 💰 Total disponible para aplicar
         total_disponible = monto_ingresado
         if usar_saldo_favor:
             total_disponible += saldo_favor
             cliente.saldo_favor = Decimal("0")
 
-        # 1️⃣ Crear registro de pago
+        # 1️⃣ Pago tradicional (SISTEMA VIEJO)
         pago = Pago(
             cliente_id=cliente_id,
             monto=monto_ingresado,
@@ -80,7 +80,17 @@ class PagoService:
         )
         db.session.add(pago)
 
-        # 2️⃣ Ventas activas pendientes
+        # 🟡 1.1 MOVIMIENTO (NUEVO - AUDITORÍA)
+        movimiento_pago = MovimientoCliente(
+            cliente_id=cliente_id,
+            tipo=TipoMovimientoCliente.PAGO,
+            monto=monto_ingresado,
+            pago=pago,
+            observaciones=observaciones
+        )
+        db.session.add(movimiento_pago)
+
+        # 2️⃣ Ventas pendientes
         estado_deleted = StatusService.get_status_by_code("deleted")
 
         ventas_pendientes = (
@@ -94,7 +104,6 @@ class PagoService:
 
         restante = total_disponible
 
-        # 3️⃣ Aplicar pagos
         for venta in ventas_pendientes:
             saldo_venta = Decimal(venta.total) - Decimal(venta.pagado)
 
@@ -102,22 +111,46 @@ class PagoService:
                 venta.pagado += saldo_venta
                 restante -= saldo_venta
 
-                venta.actualizar_saldo()  # 🔥 CLAVE
+                venta.actualizar_saldo()
 
                 estado_pagada = StatusService.get_status_by_code("charged")
                 if estado_pagada:
                     venta.estado_id = estado_pagada.id
 
+                # 🟡 MOVIMIENTO VENTA (AUDITORÍA)
+                db.session.add(MovimientoCliente(
+                    cliente_id=cliente_id,
+                    tipo=TipoMovimientoCliente.VENTA,
+                    monto=-saldo_venta,
+                    venta=venta,
+                    observaciones="Aplicación de pago a venta"
+                ))
+
             else:
                 venta.pagado += restante
-                restante = Decimal("0")
 
-                venta.actualizar_saldo()  # 🔥 CLAVE
+                db.session.add(MovimientoCliente(
+                    cliente_id=cliente_id,
+                    tipo=TipoMovimientoCliente.VENTA,
+                    monto=-restante,
+                    venta=venta,
+                    observaciones="Pago parcial"
+                ))
+
+                restante = Decimal("0")
+                venta.actualizar_saldo()
                 break
 
-        # 4️⃣ Saldo a favor
+        # 3️⃣ saldo a favor (legacy)
         if restante > 0:
             cliente.saldo_favor = (cliente.saldo_favor or Decimal("0")) + restante
+
+            db.session.add(MovimientoCliente(
+                cliente_id=cliente_id,
+                tipo=TipoMovimientoCliente.CREDITO,
+                monto=restante,
+                observaciones="Saldo a favor generado"
+            ))
 
         db.session.commit()
 

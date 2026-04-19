@@ -16,6 +16,8 @@ class Config:
     CLOUDINARY_API_KEY = os.getenv("CLOUDINARY_API_KEY")
     CLOUDINARY_API_SECRET = os.getenv("CLOUDINARY_API_SECRET")
     
+    MOVIMIENTOS_CLIENTE_ENABLED = os.getenv("MOVIMIENTOS_CLIENTE_ENABLED", "false").lower() == "true"
+    
 # ARCA (ex AFIP)
     ARCA_ENV = os.getenv("ARCA_ENV", "test")
     # print("Arca en el .env", ARCA_ENV)
