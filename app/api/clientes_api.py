@@ -147,3 +147,32 @@ def resumen_para_cliente(cliente_id):
         return jsonify({"error": "Cliente no encontrado"}), 404
 
     return jsonify(data), 200
+
+@clientes_bp.route('/<int:cliente_id>/movimientos/ajuste', methods=['POST'])
+def crear_ajuste_migracion(cliente_id):
+    data = request.get_json()
+
+    if not data:
+        return jsonify({"error": "Body requerido"}), 400
+
+    diferencia = data.get("diferencia")
+    deuda_legacy = data.get("deuda_legacy")
+    deuda_movimientos = data.get("deuda_movimientos")
+    saldo_favor = data.get("saldo_favor")
+
+    if diferencia is None:
+        return jsonify({"error": "diferencia es obligatoria"}), 400
+
+    try:
+        movimiento = ClienteService.crear_ajuste(
+            cliente_id=cliente_id,
+            diferencia=float(diferencia),
+            deuda_legacy=deuda_legacy,
+            deuda_movimientos=deuda_movimientos,
+            saldo_favor=saldo_favor
+        )
+
+        return jsonify(movimiento), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400

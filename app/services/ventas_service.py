@@ -333,16 +333,10 @@ class VentaService:
             nuevo_total = Decimal(venta.total or 0)
 
             if movimiento_base:
-                diferencia = nuevo_total - Decimal(movimiento_base.monto or 0)
-
-                if diferencia != 0:
-                    db.session.add(MovimientoCliente(
-                        cliente_id=venta.cliente_id,
-                        tipo=TipoMovimientoCliente.AJUSTE,
-                        monto=diferencia,
-                        venta_id=venta.id,
-                        observaciones="AUTO: ajuste por modificación de venta"
-                    ))
+                movimiento_base.monto = nuevo_total
+                movimiento_base.observaciones = (
+                    f"Actualizado de {movimiento_base.monto} a {nuevo_total}"
+                )
             else:
                 db.session.add(MovimientoCliente(
                     cliente_id=venta.cliente_id,

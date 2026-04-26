@@ -433,3 +433,92 @@ class ClienteService:
         ).scalar()
 
         return float(total)
+    
+    
+    @staticmethod
+    def crear_ajuste(
+        cliente_id: int,
+        diferencia: float,
+        deuda_legacy=None,
+        deuda_movimientos=None,
+        saldo_favor=None
+    ):
+        cliente = Cliente.query.get_or_404(cliente_id)
+
+        diferencia = Decimal(str(diferencia))
+        saldo_favor_actual = Decimal(str(cliente.saldo_favor or 0))
+
+        observacion_base = (
+            f"Migración legacy={deuda_legacy} "
+            f"movimientos={deuda_movimientos} "
+            f"saldo_favor={saldo_favor}"
+        )
+
+        restante = Decimal("0")
+
+        # 🔥 1. aplicar saldo a favor SIN modificar la diferencia
+        aplicacion = min(diferencia, saldo_favor_actual)
+
+        cliente.saldo_favor = saldo_favor_actual - aplicacion
+
+        # 🔥 2. aplicar como pago a ventas (igual que registrar_pago_cliente)
+        ventas_pendientes = (
+            Venta.query
+            .filter_by(cliente_id=cliente_id)
+            .filter(Venta.pagado < Venta.total)
+            .order_by(Venta.fecha_venta)
+            .all()
+        )
+
+        monto_restante = aplicacion
+
+        for venta in ventas_pendientes:
+            saldo_venta = Decimal(venta.total) - Decimal(venta.pagado)
+
+            if monto_restante >= saldo_venta:
+                venta.pagado += saldo_venta
+                monto_restante -= saldo_venta
+
+                venta.actualizar_saldo()
+
+                estado = StatusService.get_status_by_code("charged")
+                if estado:
+                    venta.estado_id = estado.id
+
+            else:
+                venta.pagado += monto_restante
+                venta.actualizar_saldo()
+                monto_restante = Decimal("0")
+                break
+
+        # 🔥 3. generar movimiento AJUSTE por diferencia restante
+        ultimo_movimiento = None
+
+        observacion_final = (
+            observacion_base +
+            f" | saldo_favor_usado={aplicacion}"
+        )
+
+        if diferencia > 0:
+            ultimo_movimiento = MovimientoCliente(
+                cliente_id=cliente_id,
+                tipo=TipoMovimientoCliente.AJUSTE,
+                monto=diferencia,
+                observaciones=observacion_final + " | genera deuda ajustada"
+            )
+            db.session.add(ultimo_movimiento)
+
+        # 🔥 4. si hubo consumo de saldo, registrarlo también como crédito usado implícito
+        if aplicacion > 0:
+            db.session.add(
+                MovimientoCliente(
+                    cliente_id=cliente_id,
+                    tipo=TipoMovimientoCliente.CREDITO,
+                    monto=aplicacion,
+                    observaciones=observacion_final + " | consumo saldo a favor"
+                )
+            )
+
+        db.session.commit()
+
+        return ultimo_movimiento.serialize() if ultimo_movimiento else {"ok": True}
