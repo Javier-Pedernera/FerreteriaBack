@@ -1,4 +1,6 @@
 from decimal import Decimal
+
+from sqlalchemy import func
 from app.models import Pago
 from app import db
 from datetime import datetime, timezone
@@ -6,6 +8,7 @@ from app.models.cliente import Cliente
 from app.models.venta import Venta
 from app.services.status_service import StatusService
 from app.models.movimiento_cliente import MovimientoCliente, TipoMovimientoCliente
+from app.services.ventas_service import VentaService
 
 class PagoService:
 
@@ -53,25 +56,22 @@ class PagoService:
         db.session.commit()
         return pago
     
+    
     @staticmethod
     def registrar_pago_cliente(
         cliente_id: int,
         monto: float,
         forma_pago_id: int = None,
         observaciones: str = None,
-        usar_saldo_favor: bool = False
     ):
         cliente = Cliente.query.get_or_404(cliente_id)
 
         monto_ingresado = Decimal(str(monto))
-        saldo_favor = Decimal(str(cliente.saldo_favor or 0))
+        credito_disponible = VentaService.obtener_credito_disponible(cliente_id)
 
-        total_disponible = monto_ingresado
-        if usar_saldo_favor:
-            total_disponible += saldo_favor
-            cliente.saldo_favor = Decimal("0")
+        total_disponible = monto_ingresado + credito_disponible
 
-        # 1️⃣ Pago tradicional (SISTEMA VIEJO)
+        # 1️⃣ Pago (UNO SOLO)
         pago = Pago(
             cliente_id=cliente_id,
             monto=monto_ingresado,
@@ -80,17 +80,6 @@ class PagoService:
         )
         db.session.add(pago)
 
-        # 🟡 1.1 MOVIMIENTO (NUEVO - AUDITORÍA)
-        movimiento_pago = MovimientoCliente(
-            cliente_id=cliente_id,
-            tipo=TipoMovimientoCliente.PAGO,
-            monto=monto_ingresado,
-            pago=pago,
-            observaciones=observaciones
-        )
-        db.session.add(movimiento_pago)
-
-        # 2️⃣ Ventas pendientes
         estado_deleted = StatusService.get_status_by_code("deleted")
 
         ventas_pendientes = (
@@ -103,54 +92,65 @@ class PagoService:
         )
 
         restante = total_disponible
+        credito_restante = credito_disponible
+        credito_usado_total = Decimal("0")
 
         for venta in ventas_pendientes:
+            if restante <= 0:
+                break
+
             saldo_venta = Decimal(venta.total) - Decimal(venta.pagado)
 
-            if restante >= saldo_venta:
-                venta.pagado += saldo_venta
-                restante -= saldo_venta
+            aplicado = min(restante, saldo_venta)
 
-                venta.actualizar_saldo()
+            venta.pagado += aplicado
+            restante -= aplicado
 
+            # 🔥 calcular cuánto de esto fue crédito
+            usado_credito = min(aplicado, credito_restante)
+            credito_restante -= usado_credito
+            credito_usado_total += usado_credito
+
+            if venta.pagado >= venta.total:
                 estado_pagada = StatusService.get_status_by_code("charged")
                 if estado_pagada:
                     venta.estado_id = estado_pagada.id
 
-                # 🟡 MOVIMIENTO VENTA (AUDITORÍA)
-                db.session.add(MovimientoCliente(
-                    cliente_id=cliente_id,
-                    tipo=TipoMovimientoCliente.VENTA,
-                    monto=-saldo_venta,
-                    venta=venta,
-                    observaciones="Aplicación de pago a venta"
-                ))
+            venta.actualizar_saldo()
 
-            else:
-                venta.pagado += restante
+            db.session.add(MovimientoCliente(
+                cliente_id=cliente_id,
+                tipo=TipoMovimientoCliente.PAGO,
+                monto=aplicado,
+                venta_id=venta.id,
+                pago=pago,
+                observaciones=f"Aplicación pago a venta #{venta.id}"
+            ))
 
-                db.session.add(MovimientoCliente(
-                    cliente_id=cliente_id,
-                    tipo=TipoMovimientoCliente.VENTA,
-                    monto=-restante,
-                    venta=venta,
-                    observaciones="Pago parcial"
-                ))
+        # 🔥 registrar uso de crédito
+        if credito_usado_total > 0:
+            db.session.add(MovimientoCliente(
+                cliente_id=cliente_id,
+                tipo=TipoMovimientoCliente.USO_CREDITO,
+                monto=credito_usado_total,
+                observaciones="Uso de crédito disponible"
+            ))
 
-                restante = Decimal("0")
-                venta.actualizar_saldo()
-                break
+            # 🔥 actualizar cache
+            cliente.saldo_favor = (cliente.saldo_favor or Decimal("0")) - credito_usado_total
 
-        # 3️⃣ saldo a favor (legacy)
+        # 3️⃣ si sobra → nuevo crédito
         if restante > 0:
-            cliente.saldo_favor = (cliente.saldo_favor or Decimal("0")) + restante
-
             db.session.add(MovimientoCliente(
                 cliente_id=cliente_id,
                 tipo=TipoMovimientoCliente.CREDITO,
                 monto=restante,
+                pago=pago,
                 observaciones="Saldo a favor generado"
             ))
+
+            # 🔥 actualizar cache
+            cliente.saldo_favor = (cliente.saldo_favor or Decimal("0")) + restante
 
         db.session.commit()
 

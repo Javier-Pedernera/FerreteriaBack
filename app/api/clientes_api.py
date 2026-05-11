@@ -176,3 +176,11 @@ def crear_ajuste_migracion(cliente_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+    
+@clientes_bp.route('/<int:cliente_id>/migrar-saldo', methods=['POST'])
+def migrar_saldo(cliente_id):
+    try:
+        result = ClienteService.migrar_saldo_a_movimientos(cliente_id)
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400

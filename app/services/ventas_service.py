@@ -1,9 +1,12 @@
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from operator import and_
+
+from sqlalchemy import func
 from app import db
 from app.models.forma_pago import FormaPago
 from app.models.movimiento_cliente import MovimientoCliente, TipoMovimientoCliente
+from app.models.pago import Pago
 from app.models.venta import Venta
 from app.models.detalle_venta import DetalleVenta
 from app.models.status import Status
@@ -80,7 +83,7 @@ class VentaService:
             movimiento = MovimientoCliente(
                 cliente_id=venta.cliente_id,
                 tipo=TipoMovimientoCliente.VENTA,
-                monto=Decimal(venta.total),
+                monto=-Decimal(venta.total),
                 venta_id=venta.id,
                 observaciones="AUTO: venta creada"
             )
@@ -260,21 +263,21 @@ class VentaService:
         if venta.estado and venta.estado.code == 'deleted':
             raise ValueError("No se puede actualizar una venta eliminada")
 
-        # Actualiza campos principales
+        # =========================
+        # 🔹 ACTUALIZAR CAMPOS
+        # =========================
         venta.cliente_id = data.get('cliente_id', venta.cliente_id)
         venta.total = Decimal(data.get('total', venta.total))
         venta.descuento = Decimal(data.get('descuento', venta.descuento or 0))
         venta.forma_pago_id = data.get('forma_pago_id', venta.forma_pago_id)
         venta.observaciones = data.get('observaciones', getattr(venta, 'observaciones', None))
 
-        # 🔹 Solo actualizar pagado si viene en data
         if 'pagado' in data:
             venta.pagado = Decimal(data['pagado'] or 0)
 
-        # 🔹 Actualizar saldo correctamente
         venta.actualizar_saldo()
 
-        # 🔹 Si se pagó todo, poner fecha_pago y estado "charged"
+        # 🔹 Estado
         if venta.saldo <= 0:
             estado_pagada = StatusService.get_status_by_code('charged')
             if estado_pagada:
@@ -282,7 +285,9 @@ class VentaService:
             if not venta.fecha_pago:
                 venta.fecha_pago = datetime.now(timezone.utc)
 
-        # Manejo de detalles
+        # =========================
+        # 🔹 DETALLES
+        # =========================
         nuevos_detalles = data.get('detalles', [])
         existentes_map = {d.producto_id: d for d in venta.detalles}
         nuevos_ids = {d['producto_id'] for d in nuevos_detalles}
@@ -321,7 +326,7 @@ class VentaService:
                 db.session.add(nuevo_detalle)
 
         # =========================
-        # 🧠 NUEVO: MOVIMIENTOS CLIENTE (SIN ROMPER NADA)
+        # 🧠 MOVIMIENTO CLIENTE
         # =========================
         if venta.cliente_id:
 
@@ -331,17 +336,20 @@ class VentaService:
             ).first()
 
             nuevo_total = Decimal(venta.total or 0)
+            nuevo_monto = -nuevo_total  # 🔥 CLAVE: SIEMPRE NEGATIVO
 
             if movimiento_base:
-                movimiento_base.monto = nuevo_total
+                monto_anterior = movimiento_base.monto
+
+                movimiento_base.monto = nuevo_monto
                 movimiento_base.observaciones = (
-                    f"Actualizado de {movimiento_base.monto} a {nuevo_total}"
+                    f"Actualizado de {monto_anterior} a {nuevo_monto}"
                 )
             else:
                 db.session.add(MovimientoCliente(
                     cliente_id=venta.cliente_id,
                     tipo=TipoMovimientoCliente.VENTA,
-                    monto=nuevo_total,
+                    monto=nuevo_monto,  # 🔥 NEGATIVO
                     venta_id=venta.id,
                     observaciones="AUTO: reconstrucción de movimiento"
                 ))
@@ -368,7 +376,9 @@ class VentaService:
 
         forma_pago = FormaPago.query.get_or_404(forma_pago_id)
 
-        total_ajustado = Decimal(venta.total) * (Decimal("1") - Decimal(descuento_aplicado) / Decimal("100"))
+        total_ajustado = Decimal(venta.total) * (
+            Decimal("1") - Decimal(descuento_aplicado) / Decimal("100")
+        )
 
         if forma_pago.nombre.lower() == 'cuenta corriente':
             venta.pagado = Decimal("0")
@@ -399,21 +409,50 @@ class VentaService:
             raise Exception(f"Estado '{estado_code}' no encontrado")
 
         venta.estado_id = nuevo_estado.id
+
         # =========================
-        # MOVIMIENTOS CLIENTE (PAGO)
+        # PAGO (SIEMPRE)
         # =========================
+        if forma_pago.nombre.lower() != 'cuenta corriente':
 
-        if venta.cliente_id:
+            pago = Pago(
+                cliente_id=venta.cliente_id,  # puede ser None ✔
+                monto=Decimal(monto_abonado),
+                forma_pago_id=forma_pago_id,
+                observaciones=observaciones or f"Pago venta #{venta.id}"
+            )
+            db.session.add(pago)
 
-            if forma_pago.nombre.lower() != 'cuenta corriente':
-
+            # =========================
+            # MOVIMIENTO (SOLO SI HAY CLIENTE)
+            # =========================
+            if venta.cliente_id:
                 db.session.add(MovimientoCliente(
                     cliente_id=venta.cliente_id,
                     tipo=TipoMovimientoCliente.PAGO,
                     monto=Decimal(monto_abonado),
                     venta_id=venta.id,
+                    pago=pago,
                     observaciones=f"Pago venta #{venta.id}"
                 ))
-                
+
         db.session.commit()
         return venta.serialize()
+    
+    @staticmethod
+    def obtener_credito_disponible(cliente_id):
+        creditos = db.session.query(
+            func.coalesce(func.sum(MovimientoCliente.monto), 0)
+        ).filter(
+            MovimientoCliente.cliente_id == cliente_id,
+            MovimientoCliente.tipo == TipoMovimientoCliente.CREDITO
+        ).scalar()
+
+        pagos = db.session.query(
+            func.coalesce(func.sum(MovimientoCliente.monto), 0)
+        ).filter(
+            MovimientoCliente.cliente_id == cliente_id,
+            MovimientoCliente.tipo == TipoMovimientoCliente.USO_CREDITO
+        ).scalar()
+
+        return Decimal(creditos) - Decimal(pagos)

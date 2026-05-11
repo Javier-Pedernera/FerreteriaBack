@@ -17,7 +17,7 @@ class Pago(db.Model):
     cliente_id = db.Column(
         db.Integer,
         db.ForeignKey('clientes.id'),
-        nullable=False
+        nullable=True
     )
 
     forma_pago_id = db.Column(

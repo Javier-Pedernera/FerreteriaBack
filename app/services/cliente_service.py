@@ -7,6 +7,7 @@ from app.models.cliente import Cliente
 from app.models.pago import Pago
 from app.models.persona_autorizada import PersonaAutorizada
 from app.models.venta import Venta
+from app.services.pago_service import PagoService
 from app.services.status_service import StatusService
 from app.models.movimiento_cliente import MovimientoCliente, TipoMovimientoCliente
 from config import Config
@@ -162,7 +163,6 @@ class ClienteService:
         # =========================================================
         # 🔵 MOVIMIENTOS (NUEVO SISTEMA - EN PARALELO)
         # =========================================================
-
         deuda_total_movimientos = 0.0
 
         if usar_movimientos:
@@ -176,18 +176,34 @@ class ClienteService:
 
             movimientos = mov_q.all()
 
+            # 🔥 FIX: NO interpretar tipo, ya vienen con signo correcto
             for m in movimientos:
-                if m.tipo == TipoMovimientoCliente.VENTA:
-                    deuda_total_movimientos += float(m.monto)
+                deuda_total_movimientos += float(m.monto)
+        # deuda_total_movimientos = 0.0
 
-                elif m.tipo == TipoMovimientoCliente.PAGO:
-                    deuda_total_movimientos -= float(m.monto)
+        # if usar_movimientos:
+        #     mov_q = MovimientoCliente.query.filter_by(cliente_id=cliente_id)
 
-                elif m.tipo == TipoMovimientoCliente.CREDITO:
-                    deuda_total_movimientos -= float(m.monto)
+        #     if desde_dt and hasta_dt:
+        #         mov_q = mov_q.filter(
+        #             MovimientoCliente.fecha >= desde_dt,
+        #             MovimientoCliente.fecha <= hasta_dt
+        #         )
 
-                elif m.tipo == TipoMovimientoCliente.AJUSTE:
-                    deuda_total_movimientos += float(m.monto)
+        #     movimientos = mov_q.all()
+
+        #     for m in movimientos:
+        #         if m.tipo == TipoMovimientoCliente.VENTA:
+        #             deuda_total_movimientos += float(m.monto)
+
+        #         elif m.tipo == TipoMovimientoCliente.PAGO:
+        #             deuda_total_movimientos -= float(m.monto)
+
+        #         elif m.tipo == TipoMovimientoCliente.CREDITO:
+        #             deuda_total_movimientos -= float(m.monto)
+
+        #         elif m.tipo == TipoMovimientoCliente.AJUSTE:
+        #             deuda_total_movimientos += float(m.monto)
 
         # -------------------
         # PAGOS (SIN CAMBIOS)
@@ -417,15 +433,7 @@ class ClienteService:
     def calcular_deuda_cliente(cliente_id):
         total = db.session.query(
             func.coalesce(
-                func.sum(
-                    case(
-                        (MovimientoCliente.tipo == TipoMovimientoCliente.VENTA, MovimientoCliente.monto),
-                        (MovimientoCliente.tipo == TipoMovimientoCliente.PAGO, -MovimientoCliente.monto),
-                        (MovimientoCliente.tipo == TipoMovimientoCliente.CREDITO, -MovimientoCliente.monto),
-                        (MovimientoCliente.tipo == TipoMovimientoCliente.AJUSTE, MovimientoCliente.monto),  # 🔥 clave
-                        else_=0
-                    )
-                ),
+                func.sum(MovimientoCliente.monto),
                 0
             )
         ).filter(
@@ -454,14 +462,14 @@ class ClienteService:
             f"saldo_favor={saldo_favor}"
         )
 
-        restante = Decimal("0")
-
-        # 🔥 1. aplicar saldo a favor SIN modificar la diferencia
+        # 🔥 1. aplicar saldo a favor
         aplicacion = min(diferencia, saldo_favor_actual)
-
         cliente.saldo_favor = saldo_favor_actual - aplicacion
 
-        # 🔥 2. aplicar como pago a ventas (igual que registrar_pago_cliente)
+        # 🔥 diferencia REAL que falta ajustar
+        diferencia_real = diferencia
+
+        # 🔥 2. aplicar como pago a ventas
         ventas_pendientes = (
             Venta.query
             .filter_by(cliente_id=cliente_id)
@@ -491,7 +499,7 @@ class ClienteService:
                 monto_restante = Decimal("0")
                 break
 
-        # 🔥 3. generar movimiento AJUSTE por diferencia restante
+        # 🔥 3. generar AJUSTE SOLO por lo que falta
         ultimo_movimiento = None
 
         observacion_final = (
@@ -499,26 +507,51 @@ class ClienteService:
             f" | saldo_favor_usado={aplicacion}"
         )
 
-        if diferencia > 0:
+        if diferencia_real > 0:
             ultimo_movimiento = MovimientoCliente(
                 cliente_id=cliente_id,
                 tipo=TipoMovimientoCliente.AJUSTE,
-                monto=diferencia,
+                monto=-diferencia_real,
                 observaciones=observacion_final + " | genera deuda ajustada"
             )
             db.session.add(ultimo_movimiento)
 
-        # 🔥 4. si hubo consumo de saldo, registrarlo también como crédito usado implícito
-        if aplicacion > 0:
-            db.session.add(
-                MovimientoCliente(
-                    cliente_id=cliente_id,
-                    tipo=TipoMovimientoCliente.CREDITO,
-                    monto=aplicacion,
-                    observaciones=observacion_final + " | consumo saldo a favor"
-                )
-            )
+        # 🔥 4. registrar consumo de saldo
+        # if aplicacion > 0:
+        #     db.session.add(
+        #         MovimientoCliente(
+        #             cliente_id=cliente_id,
+        #             tipo=TipoMovimientoCliente.CREDITO,
+        #             monto=aplicacion,
+        #             observaciones=observacion_final + " | consumo saldo a favor"
+        #         )
+        #     )
 
         db.session.commit()
 
         return ultimo_movimiento.serialize() if ultimo_movimiento else {"ok": True}
+
+
+    @staticmethod
+    def migrar_saldo_a_movimientos(cliente_id: int):
+        cliente = Cliente.query.get_or_404(cliente_id)
+
+        saldo_favor = Decimal(str(cliente.saldo_favor or 0))
+
+        if saldo_favor <= 0:
+            return {"message": "No hay saldo a migrar"}
+
+        # 🔥 usar saldo como si fuera un pago real
+        PagoService.registrar_pago_cliente(
+            cliente_id=cliente_id,
+            monto=float(saldo_favor),
+            forma_pago_id=None,
+            observaciones="Migración saldo a favor"
+        )
+
+        # 🔥 limpiar saldo viejo
+        cliente.saldo_favor = Decimal("0")
+
+        db.session.commit()
+
+        return {"message": "Saldo migrado correctamente"}

@@ -7,6 +7,7 @@ from app import db
 class TipoMovimientoCliente(enum.Enum):
     VENTA = "venta"
     PAGO = "pago"
+    USO_CREDITO = "uso_credito"
     CREDITO = "credito"
     AJUSTE = "ajuste"
 
