@@ -69,7 +69,7 @@ def registrar_pago(cliente_id):
         monto=monto,
         forma_pago_id=forma_pago_id,
         observaciones=observaciones,
-        usar_saldo_favor=usar_saldo_favor
+        # usar_saldo_favor=usar_saldo_favor
     )
 
     cliente = Cliente.query.get(cliente_id)
