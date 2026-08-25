@@ -4,9 +4,11 @@ from operator import and_
 
 from sqlalchemy import func
 from app import db
+from app.models.cliente import Cliente
 from app.models.forma_pago import FormaPago
 from app.models.movimiento_cliente import MovimientoCliente, TipoMovimientoCliente
 from app.models.pago import Pago
+from app.models.usuario import Usuario
 from app.models.venta import Venta
 from app.models.detalle_venta import DetalleVenta
 from app.models.status import Status
@@ -417,6 +419,7 @@ class VentaService:
 
             pago = Pago(
                 cliente_id=venta.cliente_id,  # puede ser None ✔
+                venta_id=venta.id, 
                 monto=Decimal(monto_abonado),
                 forma_pago_id=forma_pago_id,
                 observaciones=observaciones or f"Pago venta #{venta.id}"
@@ -448,11 +451,219 @@ class VentaService:
             MovimientoCliente.tipo == TipoMovimientoCliente.CREDITO
         ).scalar()
 
-        pagos = db.session.query(
+        credito_usado = db.session.query(
             func.coalesce(func.sum(MovimientoCliente.monto), 0)
         ).filter(
             MovimientoCliente.cliente_id == cliente_id,
             MovimientoCliente.tipo == TipoMovimientoCliente.USO_CREDITO
         ).scalar()
 
-        return Decimal(creditos) - Decimal(pagos)
+        # credito_usado ya es negativo, por eso se suma
+        return Decimal(creditos) + Decimal(credito_usado)
+    
+    
+    # =========================================================================
+# Agregar este import arriba de ventas_service.py, junto a los demás:
+#   from app.models.cliente import Cliente
+#   from app.models.usuario import Usuario   # ajustar el nombre si difiere
+#
+# Agregar este método DENTRO de la clase VentaService:
+# =========================================================================
+
+    @staticmethod
+    def gestionar_devolucion(venta_id: int, data: dict) -> dict:
+        """
+        Devuelve parte o la totalidad de los productos de una venta.
+        Si se devuelve todo, el total de la venta queda en 0.
+    
+        Si la venta ya tenía pago(s) registrado(s) (tabla `pagos`, vía el
+        MovimientoCliente tipo PAGO ligado a esta venta) y el excedente generado
+        por la devolución los cubre, se reducen o eliminan esos pagos para que
+        reflejen la realidad (no se toca saldo_favor ni deuda del cliente).
+    
+        data esperado:
+        {
+            "usuario_id": 1,                      # opcional, solo para la nota
+            "motivo": "Producto en mal estado",    # opcional
+            "items": [
+                {"producto_id": 10, "cantidad": 2}
+            ]
+        }
+        """
+        venta = Venta.query.get_or_404(venta_id)
+    
+        if venta.estado and venta.estado.code == 'deleted':
+            raise ValueError("No se puede procesar una devolución de una venta eliminada")
+    
+        items = data.get('items') or []
+        if not items:
+            raise ValueError("Debe incluir al menos un item a devolver")
+    
+        motivo = data.get('motivo', '')
+        usuario_id = data.get('usuario_id')
+    
+        detalles_map = {d.producto_id: d for d in venta.detalles}
+    
+        monto_devuelto_total = Decimal("0")
+        resumen_items = []
+    
+        # =========================
+        # 🔹 PROCESAR CADA ITEM DEVUELTO
+        # =========================
+        for item in items:
+            producto_id = item.get('producto_id')
+            cantidad_devuelta = Decimal(str(item.get('cantidad', 0)))
+    
+            if cantidad_devuelta <= 0:
+                raise ValueError(f"Cantidad inválida para producto {producto_id}")
+    
+            detalle = detalles_map.get(producto_id)
+            if not detalle:
+                raise ValueError(f"El producto {producto_id} no pertenece a esta venta")
+    
+            if cantidad_devuelta > Decimal(str(detalle.cantidad)):
+                raise ValueError(
+                    f"No se puede devolver {cantidad_devuelta} de un producto "
+                    f"del que solo se vendieron {detalle.cantidad}"
+                )
+    
+            precio_unitario = Decimal(detalle.precio_unitario)
+            monto_devuelto_total += cantidad_devuelta * precio_unitario
+    
+            nombre_producto = detalle.producto.nombre if detalle.producto else f"#{producto_id}"
+            resumen_items.append(f"-{cantidad_devuelta} {nombre_producto}")
+    
+            # Reduce (o elimina) el detalle original
+            nueva_cantidad = Decimal(str(detalle.cantidad)) - cantidad_devuelta
+            if nueva_cantidad <= 0:
+                db.session.delete(detalle)
+            else:
+                detalle.cantidad = nueva_cantidad
+    
+            # TODO: cuando esté funcionando el control de stock,
+            # reponer acá: producto = Producto.query.get(producto_id); producto.disponibles += cantidad_devuelta
+    
+        # =========================
+        # 🔹 RECALCULAR TOTAL DE LA VENTA
+        # =========================
+        nuevo_total = Decimal(venta.total) - monto_devuelto_total
+        if nuevo_total < 0:
+            nuevo_total = Decimal("0")
+    
+        venta.total = nuevo_total
+
+        # 🔹 Si se devolvió todo, la venta queda anulada
+        if nuevo_total == 0:
+            estado_cancelado = Status.query.filter_by(code='cancelled').first()
+            if estado_cancelado:
+                venta.estado_id = estado_cancelado.id
+        # =========================
+        # 🔹 EXCEDENTE: si ya se había pagado más de lo que ahora corresponde,
+        # ajustamos/eliminamos los Pago reales de esta venta
+        # =========================
+        diferencia = Decimal(venta.pagado or 0) - nuevo_total
+    
+        if diferencia > 0:
+            monto_restante = diferencia
+
+            if venta.cliente_id:
+                # Cliente registrado: un mismo Pago puede haber cubierto varias ventas
+                # (ej. registrar_pago_cliente). El MovimientoCliente(tipo=PAGO, venta_id=X)
+                # nos dice cuánto de qué pago se aplicó específicamente a ESTA venta.
+                movimientos_pago = MovimientoCliente.query.filter_by(
+                    venta_id=venta.id,
+                    tipo=TipoMovimientoCliente.PAGO
+                ).order_by(MovimientoCliente.fecha.desc()).all()
+
+                for mov_pago in movimientos_pago:
+                    if monto_restante <= 0:
+                        break
+
+                    monto_aplicado_a_esta_venta = Decimal(mov_pago.monto)
+                    pago = mov_pago.pago
+
+                    reduccion = min(monto_restante, monto_aplicado_a_esta_venta)
+
+                    # Reducimos lo que este pago había aplicado a ESTA venta puntual
+                    nuevo_monto_mov = monto_aplicado_a_esta_venta - reduccion
+                    if nuevo_monto_mov <= 0:
+                        db.session.delete(mov_pago)
+                    else:
+                        mov_pago.monto = nuevo_monto_mov
+
+                    # Reducimos el Pago real en la misma medida, sin importar
+                    # si también cubrió otras ventas (no lo borramos si aún les queda)
+                    if pago:
+                        nuevo_monto_pago = Decimal(pago.monto) - reduccion
+                        if nuevo_monto_pago <= 0:
+                            db.session.delete(pago)
+                        else:
+                            pago.monto = nuevo_monto_pago
+
+                    monto_restante -= reduccion
+
+            else:
+                # Cliente desconocido: el Pago está 1 a 1 con la venta (vía venta_id directo,
+                # cargado en cobrar_venta), no hay reparto posible.
+                pagos_venta = Pago.query.filter_by(venta_id=venta.id).order_by(Pago.fecha.desc()).all()
+
+                for pago in pagos_venta:
+                    if monto_restante <= 0:
+                        break
+
+                    monto_pago_actual = Decimal(pago.monto)
+
+                    if monto_restante >= monto_pago_actual:
+                        monto_restante -= monto_pago_actual
+                        db.session.delete(pago)
+                    else:
+                        pago.monto = monto_pago_actual - monto_restante
+                        monto_restante = Decimal("0")
+
+            venta.pagado = nuevo_total
+    
+        # =========================
+        # 🔹 ACTUALIZAR MOVIMIENTO DE VENTA (mismo patrón que actualizar_venta)
+        # =========================
+        if venta.cliente_id:
+            movimiento_venta = MovimientoCliente.query.filter_by(
+                venta_id=venta.id,
+                tipo=TipoMovimientoCliente.VENTA
+            ).first()
+    
+            nuevo_monto = -nuevo_total
+    
+            if movimiento_venta:
+                movimiento_venta.monto = nuevo_monto
+                movimiento_venta.observaciones = f"Actualizado por devolución (venta #{venta.id})"
+            else:
+                db.session.add(MovimientoCliente(
+                    cliente_id=venta.cliente_id,
+                    tipo=TipoMovimientoCliente.VENTA,
+                    monto=nuevo_monto,
+                    venta_id=venta.id,
+                    observaciones="AUTO: reconstrucción de movimiento por devolución"
+                ))
+    
+        # =========================
+        # 🔹 NOTA EN OBSERVACIONES (rastro liviano, sin tabla nueva)
+        # =========================
+        usuario_nombre = None
+        if usuario_id:
+            usuario = Usuario.query.get(usuario_id)
+            usuario_nombre = usuario.nombre if usuario else None
+    
+        fecha_str = datetime.now(timezone.utc).strftime('%d/%m/%Y %H:%M')
+        nota = f"[Devolución {fecha_str}"
+        if usuario_nombre:
+            nota += f" - {usuario_nombre}"
+        nota += f"] {', '.join(resumen_items)}"
+        if motivo:
+            nota += f". Motivo: {motivo}"
+        if diferencia > 0:
+            nota += f". Excedente ${diferencia} ajustado en los pagos de la venta"
+    
+        venta.observaciones = f"{venta.observaciones}\n{nota}" if venta.observaciones else nota
+    
+        db.session.commit()
+        return venta.serialize()

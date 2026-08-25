@@ -1,4 +1,5 @@
 from flask import Blueprint, request, jsonify
+# from app.services.devolucion_service import DevolucionService
 from app.services.ventas_service import VentaService
 from decimal import Decimal
 
@@ -110,3 +111,35 @@ def cobrar_venta(venta_id):
         return jsonify(venta_cobrada), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+    
+# Agregar esta ruta a ventas_api.py, junto a las demás:
+
+@ventas_api.route('/<int:venta_id>/devolucion', methods=['POST'])
+def gestionar_devolucion(venta_id):
+    data = request.get_json()
+    try:
+        venta_actualizada = VentaService.gestionar_devolucion(venta_id, data)
+        return jsonify(venta_actualizada), 200
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+# @ventas_api.route('/<int:venta_id>/devolucion', methods=['POST'])
+# def crear_devolucion(venta_id):
+#     data = request.get_json()
+#     try:
+#         devolucion = DevolucionService.crear_devolucion(venta_id, data)
+#         return jsonify(devolucion), 201
+#     except ValueError as e:
+#         return jsonify({'error': str(e)}), 400
+#     except Exception as e:
+#         return jsonify({'error': str(e)}), 500
+ 
+ 
+# @ventas_api.route('/<int:venta_id>/devoluciones', methods=['GET'])
+# def listar_devoluciones(venta_id):
+#     try:
+#         devoluciones = DevolucionService.obtener_por_venta(venta_id)
+#         return jsonify(devoluciones), 200
+#     except Exception as e:
+#         return jsonify({'error': str(e)}), 400

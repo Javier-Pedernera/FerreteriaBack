@@ -132,7 +132,7 @@ class PagoService:
             db.session.add(MovimientoCliente(
                 cliente_id=cliente_id,
                 tipo=TipoMovimientoCliente.USO_CREDITO,
-                monto=credito_usado_total,
+                monto=-credito_usado_total,
                 observaciones="Uso de crédito disponible"
             ))
 
