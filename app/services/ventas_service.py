@@ -667,3 +667,271 @@ class VentaService:
     
         db.session.commit()
         return venta.serialize()
+    
+    @staticmethod
+    def _ajustar_pago_existente(venta, delta: Decimal) -> Decimal:
+        """
+        Sube o baja el monto ya cobrado de una venta, modificando el Pago REAL
+        existente (nunca crea uno nuevo). delta > 0 sube el monto pagado,
+        delta < 0 lo baja (puede llegar a eliminar el Pago si llega a cero).
+    
+        Si hay cliente, busca el Pago vía el MovimientoCliente(tipo=PAGO,
+        venta_id=X) de esta venta puntual — esto funciona tanto si el pago es
+        exclusivo de esta venta como si viene repartido entre varias (el monto
+        del movimiento siempre refleja la porción de ESTA venta).
+        Si no hay cliente, busca el Pago directo por Pago.venta_id.
+    
+        Devuelve el delta que no se pudo aplicar (0 si se aplicó completo;
+        por ejemplo, si no hay ningún Pago registrado para ajustar).
+        """
+        if delta == 0:
+            return Decimal("0")
+    
+        pago = None
+        mov_pago = None
+    
+        if venta.cliente_id:
+            mov_pago = MovimientoCliente.query.filter_by(
+                venta_id=venta.id,
+                tipo=TipoMovimientoCliente.PAGO
+            ).order_by(MovimientoCliente.fecha.desc()).first()
+            pago = mov_pago.pago if mov_pago else None
+        else:
+            pago = Pago.query.filter_by(venta_id=venta.id).order_by(Pago.fecha.desc()).first()
+    
+        if not pago:
+            return delta  # no hay nada que ajustar, queda sin aplicar
+    
+        nuevo_monto_pago = Decimal(pago.monto) + delta
+    
+        if nuevo_monto_pago <= 0:
+            sobra = -nuevo_monto_pago
+            db.session.delete(pago)
+            if mov_pago:
+                db.session.delete(mov_pago)
+            return sobra
+    
+        pago.monto = nuevo_monto_pago
+        if mov_pago:
+            nuevo_monto_mov = Decimal(mov_pago.monto) + delta
+            mov_pago.monto = nuevo_monto_mov if nuevo_monto_mov > 0 else Decimal("0")
+    
+        return Decimal("0")
+ 
+ 
+    @staticmethod
+    def gestionar_edicion_venta(venta_id: int, data: dict) -> dict:
+        """
+        Corrige una venta ya cobrada: productos/cantidades/precios, forma de pago,
+        descuento y/o cliente. El total se recalcula siempre desde los detalles.
+        El Pago real ya existente se ajusta (sube o baja) para que 'pagado'
+        quede sincronizado con el nuevo total — nunca se crea un Pago nuevo,
+        salvo la única excepción de que la venta pase de 'cuenta corriente' a
+        tener un pago real por primera vez (ahí no hay nada previo que ajustar).
+    
+        data esperado (todos los campos son opcionales salvo que quieras
+        tocar ese aspecto puntual):
+        {
+            "cliente_id": 5,
+            "forma_pago_id": 2,
+            "descuento": 10,                       # porcentaje
+            "observaciones": "...",
+            "motivo": "Se cargó mal la cantidad",  # para la nota
+            "usuario_id": 1,                        # para la nota
+            "detalles": [
+                {"producto_id": 10, "cantidad": 3, "precio_unitario": 1500}
+            ]
+        }
+        """
+        venta = Venta.query.get_or_404(venta_id)
+    
+        if venta.estado and venta.estado.code == 'deleted':
+            raise ValueError("No se puede editar una venta eliminada")
+    
+        forma_pago_anterior = venta.forma_pago
+        era_cuenta_corriente = bool(
+            forma_pago_anterior and forma_pago_anterior.nombre.lower() == 'cuenta corriente'
+        )
+    
+        # =========================
+        # 🔹 CAMPOS SIMPLES
+        # =========================
+        if 'cliente_id' in data:
+            venta.cliente_id = data['cliente_id']
+    
+        if 'forma_pago_id' in data:
+            venta.forma_pago_id = data['forma_pago_id']
+    
+        if 'descuento' in data:
+            venta.descuento = Decimal(str(data['descuento']))
+    
+        if 'observaciones' in data:
+            venta.observaciones = data['observaciones']
+    
+        forma_pago_nueva = FormaPago.query.get(venta.forma_pago_id) if venta.forma_pago_id else None
+        es_cuenta_corriente = bool(forma_pago_nueva and forma_pago_nueva.nombre.lower() == 'cuenta corriente')
+    
+        # =========================
+        # 🔹 DETALLES (reemplazo completo, mismo patrón que actualizar_venta)
+        # =========================
+        nuevos_detalles = data.get('detalles')
+        if nuevos_detalles is not None:
+            if not nuevos_detalles:
+                raise ValueError("La venta debe tener al menos un producto")
+    
+            existentes_map = {d.producto_id: d for d in venta.detalles}
+            nuevos_ids = {d['producto_id'] for d in nuevos_detalles}
+    
+            for producto_id in list(existentes_map):
+                if producto_id not in nuevos_ids:
+                    db.session.delete(existentes_map[producto_id])
+    
+            for d in nuevos_detalles:
+                producto_id = d['producto_id']
+                cantidad = Decimal(str(d['cantidad']))
+                precio_unitario = Decimal(str(d['precio_unitario']))
+    
+                if cantidad <= 0:
+                    raise ValueError(f"Cantidad inválida para producto {producto_id}")
+    
+                if producto_id in existentes_map:
+                    detalle = existentes_map[producto_id]
+                    detalle.cantidad = cantidad
+                    detalle.precio_unitario = precio_unitario
+                else:
+                    producto = Producto.query.get(producto_id)
+                    if not producto:
+                        raise ValueError(f"Producto {producto_id} no encontrado")
+    
+                    precio_costo_unitario = (
+                        Decimal(producto.precio_ars) / Decimal(producto.presentacion_cantidad)
+                        if producto.es_fraccionable and producto.presentacion_cantidad
+                        else Decimal(producto.precio_ars)
+                    )
+    
+                    porcentaje = None
+                    if precio_costo_unitario > 0:
+                        porcentaje = float(
+                            ((precio_unitario - precio_costo_unitario) / precio_costo_unitario) * 100
+                        )
+    
+                    db.session.add(DetalleVenta(
+                        venta_id=venta.id,
+                        producto_id=producto_id,
+                        cantidad=cantidad,
+                        precio_unitario=precio_unitario,
+                        precio_costo=precio_costo_unitario,
+                        porcentaje_ganancia_aplicado=porcentaje
+                    ))
+    
+            db.session.flush()  # asegura que los INSERT/DELETE de detalles ya impactaron en la base
+    
+        # =========================
+        # 🔹 RECALCULAR TOTAL DESDE LOS DETALLES (fuente de verdad)
+        # =========================
+        # OJO: no usamos venta.detalles acá porque esa colección puede haber quedado
+        # cacheada en memoria desde antes de agregar/borrar detalles en este mismo
+        # request (SQLAlchemy no la refresca sola con flush()). Consultamos directo.
+        detalles_actuales = DetalleVenta.query.filter_by(venta_id=venta.id).all()
+    
+        total_bruto = sum(
+            (Decimal(d.cantidad) * Decimal(d.precio_unitario) for d in detalles_actuales),
+            Decimal("0")
+        )
+        venta.total = total_bruto
+    
+        total_ajustado = total_bruto * (Decimal("1") - Decimal(venta.descuento or 0) / Decimal("100"))
+    
+        pagado_anterior = Decimal(venta.pagado or 0)
+        sin_aplicar = Decimal("0")
+    
+        # =========================
+        # 🔹 AJUSTAR EL PAGO SEGÚN CORRESPONDA
+        # =========================
+        if es_cuenta_corriente:
+            # Sin pago real. Si antes tenía uno (se cambió la forma de pago a
+            # cuenta corriente), lo devolvemos a $0 tocando el Pago real.
+            if pagado_anterior > 0:
+                VentaService._ajustar_pago_existente(venta, -pagado_anterior)
+            venta.pagado = Decimal("0")
+            venta.fecha_pago = None
+    
+        else:
+            if era_cuenta_corriente and pagado_anterior == 0:
+                # Única excepción: pasa de cuenta corriente a cobrada por primera
+                # vez. No hay Pago previo que ajustar, hay que crear el primero.
+                pago_nuevo = Pago(
+                    cliente_id=venta.cliente_id,
+                    venta_id=venta.id,
+                    monto=total_ajustado,
+                    forma_pago_id=venta.forma_pago_id,
+                    observaciones=f"Pago venta #{venta.id} (generado al corregir la venta)"
+                )
+                db.session.add(pago_nuevo)
+    
+                if venta.cliente_id:
+                    db.session.add(MovimientoCliente(
+                        cliente_id=venta.cliente_id,
+                        tipo=TipoMovimientoCliente.PAGO,
+                        monto=total_ajustado,
+                        venta_id=venta.id,
+                        pago=pago_nuevo,
+                        observaciones=f"Pago venta #{venta.id} (generado al corregir la venta)"
+                    ))
+            else:
+                delta = total_ajustado - pagado_anterior
+                sin_aplicar = VentaService._ajustar_pago_existente(venta, delta)
+    
+            venta.pagado = total_ajustado - sin_aplicar
+            if not venta.fecha_pago:
+                venta.fecha_pago = datetime.now(timezone.utc)
+    
+        venta.actualizar_saldo()
+    
+        # =========================
+        # 🔹 MOVIMIENTO DE VENTA (deuda del cliente)
+        # =========================
+        if venta.cliente_id:
+            movimiento_venta = MovimientoCliente.query.filter_by(
+                venta_id=venta.id,
+                tipo=TipoMovimientoCliente.VENTA
+            ).first()
+    
+            nuevo_monto = -venta.total
+    
+            if movimiento_venta:
+                movimiento_venta.monto = nuevo_monto
+                movimiento_venta.observaciones = f"Actualizado por corrección de venta #{venta.id}"
+            else:
+                db.session.add(MovimientoCliente(
+                    cliente_id=venta.cliente_id,
+                    tipo=TipoMovimientoCliente.VENTA,
+                    monto=nuevo_monto,
+                    venta_id=venta.id,
+                    observaciones="AUTO: reconstrucción de movimiento por corrección"
+                ))
+    
+        # =========================
+        # 🔹 NOTA EN OBSERVACIONES
+        # =========================
+        usuario_id = data.get('usuario_id')
+        motivo = data.get('motivo')
+        usuario_nombre = None
+        if usuario_id:
+            usuario = Usuario.query.get(usuario_id)
+            usuario_nombre = usuario.nombre if usuario else None
+    
+        fecha_str = datetime.now(timezone.utc).strftime('%d/%m/%Y %H:%M')
+        nota = f"[Corrección {fecha_str}"
+        if usuario_nombre:
+            nota += f" - {usuario_nombre}"
+        nota += "]"
+        if motivo:
+            nota += f" {motivo}"
+        if sin_aplicar > 0:
+            nota += f". No se pudo ajustar ${sin_aplicar} en pagos (sin registro asociado), revisar a mano."
+    
+        venta.observaciones = f"{venta.observaciones}\n{nota}" if venta.observaciones else nota
+    
+        db.session.commit()
+        return venta.serialize()

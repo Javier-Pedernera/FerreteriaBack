@@ -124,6 +124,17 @@ def gestionar_devolucion(venta_id):
         return jsonify({'error': str(e)}), 400
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+    
+@ventas_api.route('/<int:venta_id>/editar', methods=['PUT'])
+def editar_venta_cobrada(venta_id):
+    data = request.get_json()
+    try:
+        venta_actualizada = VentaService.gestionar_edicion_venta(venta_id, data)
+        return jsonify(venta_actualizada), 200
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 # @ventas_api.route('/<int:venta_id>/devolucion', methods=['POST'])
 # def crear_devolucion(venta_id):
 #     data = request.get_json()
