@@ -27,3 +27,4 @@ from .empresa_fiscal_config import EmpresaFiscalConfig
 from .tipo_comprobante import TipoComprobante
 from .tipo_documento import TipoDocumento
 from .punto_venta import PuntoVenta
+from .nota import Nota

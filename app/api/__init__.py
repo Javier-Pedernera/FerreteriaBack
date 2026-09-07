@@ -22,6 +22,7 @@ from .cuentas_api import cuentas_api
 from .pago_api import pago_api
 from .empresa_fiscal_api import empresa_fiscal_api
 from .puntos_venta import puntos_venta_bp
+from .notas_api import notas_api
 
 def register_blueprints(app):
     
@@ -45,5 +46,6 @@ def register_blueprints(app):
     app.register_blueprint(facturacion_api, url_prefix="/api")
     app.register_blueprint(empresa_fiscal_api, url_prefix="/api")
     app.register_blueprint(puntos_venta_bp, url_prefix="/api/puntos-venta")
+    app.register_blueprint(notas_api, url_prefix="/api/notas")
     # app.register_blueprint(auth_api, url_prefix='/api')
     # app.register_blueprint(status_api, url_prefix='/api')
