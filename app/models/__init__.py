@@ -28,3 +28,4 @@ from .tipo_comprobante import TipoComprobante
 from .tipo_documento import TipoDocumento
 from .punto_venta import PuntoVenta
 from .nota import Nota
+from .presupuesto import Presupuesto, DetallePresupuesto
