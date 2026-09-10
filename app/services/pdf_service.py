@@ -120,16 +120,14 @@ COND_IVA_RECEPTOR_LABEL = {
 def _doc_receptor_texto(factura):
     cliente = factura.cliente
     if cliente:
-        if not cliente.tipo_documento:
-            return "-"
-        if cliente.tipo_documento.codigo_afip == 99:
-            return "Consumidor Final"
-        return f"{cliente.tipo_documento.descripcion}: {cliente.cuit or '-'}"
+        if not cliente.tipo_documento or cliente.tipo_documento.codigo_afip == 99:
+            return "—"
+        return f"{cliente.tipo_documento.descripcion}: {cliente.cuit or '—'}"
 
     doc_tipo = factura.receptor_doc_tipo or 99
     if doc_tipo == 99:
-        return "Consumidor Final"
-    return f"{DOC_TIPO_LABEL.get(doc_tipo, doc_tipo)}: {factura.receptor_doc_nro or '-'}"
+        return "—"
+    return f"{DOC_TIPO_LABEL.get(doc_tipo, doc_tipo)}: {factura.receptor_doc_nro or '—'}"
 
 
 def _fmt_fecha(d):
@@ -143,7 +141,7 @@ def _fmt_pesos(v):
 
 
 def _condicion_venta(factura):
-    """Deriva la condición de venta de las ventas facturadas (forma de pago)."""
+    """Forma de pago de las ventas facturadas."""
     formas = {v.forma_pago.nombre for v in factura.ventas if getattr(v, "forma_pago", None)}
     if len(formas) == 1:
         return formas.pop()
