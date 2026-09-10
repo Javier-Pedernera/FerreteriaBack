@@ -7,7 +7,6 @@ from app.models.factura import Factura
 from app.services.pdf_service import generar_pdf_factura
 from flask import Response, current_app
 
-from config import Config
 facturacion_api = Blueprint('facturacion_api', __name__)
 
 
@@ -143,9 +142,10 @@ def test_wsfe():
 
         if not tipo:
             return jsonify({"error": "Debe enviar ?tipo=CODIGO_AFIP"}), 400
+        pto_venta = request.args.get("pto_venta", default=1, type=int)
         service = ArcaService(empresa)
 
-        ultimo = service.probar_wsfe(tipo)
+        ultimo = service.probar_wsfe(tipo, pto_venta)
 
         return jsonify({
             "ok": True,
@@ -198,14 +198,15 @@ def listar_comprobantes_testing():
 @facturacion_api.route("/facturas/<int:id>/pdf")
 def descargar_pdf(id):
     factura = Factura.query.get_or_404(id)
-    # print("factura", factura)
     pdf = generar_pdf_factura(factura)
+
+    nombre_archivo = factura.numero_comprobante or factura.arca_numero_cbte or factura.id
 
     return Response(
         pdf,
         mimetype="application/pdf",
         headers={
-            "Content-Disposition": f"attachment; filename=factura_{factura.numero}.pdf"
+            "Content-Disposition": f"attachment; filename=factura_{nombre_archivo}.pdf"
         }
     )
     
@@ -227,7 +228,7 @@ def listar_puntos_venta_monotributo():
         session.mount("https://", TLSAdapter())
         transport = Transport(session=session)
 
-        wsdl = Config.ARCA_WSFE_URL + "?WSDL"
+        wsdl = service.wsfe_url + "?WSDL"
         client = Client(wsdl=wsdl, transport=transport)
 
         auth = {
@@ -281,7 +282,7 @@ def consultar_comprobante_arca(cbte_tipo, pto_venta, numero):
         session = Session()
         session.mount("https://", TLSAdapter())
         transport = Transport(session=session)
-        wsdl = Config.ARCA_WSFE_URL + "?WSDL"
+        wsdl = service.wsfe_url + "?WSDL"
         client = Client(wsdl=wsdl, transport=transport)
 
         auth = {
@@ -362,7 +363,7 @@ def consultar_por_cae(cae):
         session.mount("https://", TLSAdapter())
         transport = Transport(session=session)
 
-        wsdl = Config.ARCA_WSFE_URL + "?WSDL"
+        wsdl = service.wsfe_url + "?WSDL"
         client = Client(wsdl=wsdl, transport=transport)
 
         auth = {

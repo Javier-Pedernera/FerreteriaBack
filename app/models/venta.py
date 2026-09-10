@@ -56,5 +56,7 @@ class Venta(db.Model):
             "cliente": self.cliente.serialize() if self.cliente else None,
             "detalles": [detalle.serialize() for detalle in self.detalles],
             "recargo_tarjeta": str(self.recargo_tarjeta or 0),
-            "persona_autorizada": self.persona_autorizada.serialize() if self.persona_autorizada else None
+            "persona_autorizada": self.persona_autorizada.serialize() if self.persona_autorizada else None,
+            "cliente_id": self.cliente_id,
+            "factura_id": self.factura_id
         }

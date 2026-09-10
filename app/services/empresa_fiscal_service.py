@@ -36,7 +36,8 @@ class EmpresaFiscalService:
             cert_path=data["cert_path"],
             pfx_password=data["pfx_password"],  # ✅ NUEVO
             ambiente=data.get("ambiente", "testing"),
-            activo=data.get("activo", True)
+            activo=data.get("activo", True),
+            logo_url=data.get("logo_url")
         )
 
         db.session.add(empresa)
@@ -58,12 +59,12 @@ class EmpresaFiscalService:
 
         empresa.razon_social = data.get("razon_social", empresa.razon_social)
         empresa.cuit = data.get("cuit", empresa.cuit)
-        empresa.punto_venta = data.get("punto_venta", empresa.punto_venta)
         empresa.condicion_iva_id = data.get("condicion_iva_id", empresa.condicion_iva_id)
         empresa.cert_path = data.get("cert_path", empresa.cert_path)
         empresa.pfx_password = data.get("pfx_password", empresa.pfx_password)  # ✅ NUEVO
         empresa.ambiente = data.get("ambiente", empresa.ambiente)
         empresa.activo = data.get("activo", empresa.activo)
+        empresa.logo_url = data.get("logo_url", empresa.logo_url)
 
         db.session.commit()
         return empresa

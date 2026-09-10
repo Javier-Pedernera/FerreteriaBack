@@ -50,6 +50,11 @@ class FacturacionService:
         if any(not getattr(v, "facturable", True) for v in ventas):
             raise ValueError("Alguna venta no es facturable")
 
+        if tipo_comprobante_id:
+            tipo = TipoComprobante.query.get(tipo_comprobante_id)
+            if not tipo:
+                raise ValueError("Tipo de comprobante inválido")
+
         # -------------------------
         # crear factura
         # -------------------------
@@ -140,6 +145,9 @@ class FacturacionService:
         if factura.estado == "emitida":
             raise ValueError("Factura ya emitida")
 
+        if factura.estado == "emitiendo":
+            raise ValueError("Esta factura ya está siendo emitida (esperá a que termine antes de reintentar)")
+
         # 🔴 VALIDACIÓN CLAVE
         if not factura.tipo_comprobante:
             raise ValueError("La factura no tiene tipo de comprobante asignado")
@@ -147,23 +155,43 @@ class FacturacionService:
         if not factura.punto_venta:
             raise ValueError("La factura no tiene punto de venta asignado")
 
+        # Por ahora solo emitimos comprobantes tipo B/C (sin discriminar IVA).
+        # Los comprobantes letra A exigen el desglose de IVA hacia ARCA, que
+        # todavía no está implementado (ver wsfe_autorizar / ImpIVA).
+        if factura.tipo_comprobante.letra == "A":
+            raise ValueError(
+                "Todavía no está implementada la emisión de comprobantes tipo A "
+                "(requiere discriminar IVA). Usá tipo C por ahora."
+            )
+
         empresa_config = EmpresaFiscalService.get_empresa_activa()
         if not empresa_config:
             raise ValueError("No hay empresa fiscal activa")
 
+        # Marcamos "emitiendo" ANTES de llamar a ARCA y confirmamos ya, para
+        # que un doble click (o dos requests en paralelo) no disparen dos
+        # pedidos de CAE para la misma factura.
+        factura.estado = "emitiendo"
+        db.session.commit()
+
         arca = ArcaService(empresa_config)
 
-        resp = arca.emitir_comprobante(factura)
-        print("TIPO OBJ tipo_comprobante solo:", factura.tipo_comprobante)
+        try:
+            resp = arca.emitir_comprobante(factura)
+        except Exception:
+            factura.estado = "pendiente"
+            db.session.commit()
+            raise
+
         # 🔹 Guardamos el comprobante emitido
         factura.arca_tipo_cbte = factura.tipo_comprobante.codigo_afip
         factura.punto_venta_emitido = factura.punto_venta.numero
         factura.arca_numero_cbte = resp["numero"]
 
-        # 🔹 NUEVO — número completo de comprobante
+        # 🔹 número completo de comprobante
         factura.numero_comprobante = f"{factura.punto_venta_emitido:04d}-{factura.arca_numero_cbte:08d}"
 
-        # 🔹 NUEVO — fecha fiscal de emisión
+        # 🔹 fecha fiscal de emisión
         factura.fecha_emision = date.today()
 
         factura.arca_cae = resp["cae"]

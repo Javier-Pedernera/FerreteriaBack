@@ -37,8 +37,30 @@ class ArcaService:
     Servicio oficial para autenticación (WSAA) y facturación (WSFE) en ARCA.
     """
 
+    AMBIENTES_PRODUCCION = {"produccion", "producción", "production", "prod"}
+
     def __init__(self, empresa: EmpresaFiscalConfig):
         self.empresa = empresa
+
+        es_produccion = (empresa.ambiente or "").strip().lower() in self.AMBIENTES_PRODUCCION
+
+        if es_produccion:
+            self.wsaa_url = Config.ARCA_WSAA_URL_PROD
+            self.wsfe_url = Config.ARCA_WSFE_URL_PROD
+            fallback_pfx_path = Config.ARCA_PFX_PATH_PROD
+            fallback_pfx_password = Config.ARCA_PFX_PASSWORD_PROD
+        else:
+            self.wsaa_url = Config.ARCA_WSAA_URL_TEST
+            self.wsfe_url = Config.ARCA_WSFE_URL_TEST
+            fallback_pfx_path = Config.ARCA_PFX_PATH_TEST
+            fallback_pfx_password = Config.ARCA_PFX_PASSWORD_TEST
+
+        # cert_path/pfx_password de la empresa son la fuente autoritativa;
+        # si la empresa no los tiene cargados, cae al .env del servidor,
+        # pero siempre el par que corresponde al MISMO ambiente (nunca se
+        # mezcla un certificado de producción con endpoints de testing).
+        self.pfx_path = empresa.cert_path or fallback_pfx_path
+        self.pfx_password = empresa.pfx_password or fallback_pfx_password
 
     # =====================================================
     # TRA
@@ -95,8 +117,8 @@ class ArcaService:
         )
         from cryptography.hazmat.primitives import hashes
 
-        pfx_path = Config.ARCA_PFX_PATH
-        password = Config.ARCA_PFX_PASSWORD.encode()
+        pfx_path = self.pfx_path
+        password = self.pfx_password.encode()
 
         with open(pfx_path, "rb") as f:
             pfx_data = f.read()
@@ -133,7 +155,7 @@ class ArcaService:
         session.mount("https://", TLSAdapter())
         transport = Transport(session=session)
 
-        wsdl = Config.ARCA_WSAA_URL + "?WSDL"
+        wsdl = self.wsaa_url + "?WSDL"
 
         client = Client(wsdl=wsdl, transport=transport)
 
@@ -197,7 +219,7 @@ class ArcaService:
         session.mount("https://", TLSAdapter())
         transport = Transport(session=session)
 
-        wsdl = Config.ARCA_WSFE_URL + "?WSDL"
+        wsdl = self.wsfe_url + "?WSDL"
 
         client = Client(wsdl=wsdl, transport=transport)
 
@@ -269,9 +291,6 @@ class ArcaService:
             "MonCotiz": 1,
             "CondicionIVAReceptorId": cliente.condicion_iva.codigo_afip
         }
-        # print("Datos a enviar")
-        for k, v in detalle.items():
-            print(k, type(v), v)
         response = client.service.FECAESolicitar(
             Auth=auth,
             FeCAEReq={
@@ -348,7 +367,7 @@ class ArcaService:
         token, sign = self.obtener_token()
         return self.wsfe_autorizar(token, sign, factura)
     
-    def probar_wsfe(self, cbte_tipo: int):
+    def probar_wsfe(self, cbte_tipo: int, pto_venta: int = 1):
         from requests import Session
         from zeep import Client
         from zeep.transports import Transport
@@ -359,7 +378,7 @@ class ArcaService:
         session.mount("https://", TLSAdapter())
         transport = Transport(session=session)
 
-        wsdl = Config.ARCA_WSFE_URL + "?WSDL"
+        wsdl = self.wsfe_url + "?WSDL"
 
         client = Client(wsdl=wsdl, transport=transport)
 
@@ -371,7 +390,7 @@ class ArcaService:
 
         ultimo = client.service.FECompUltimoAutorizado(
             Auth=auth,
-            PtoVta=1,
+            PtoVta=pto_venta,
             CbteTipo=cbte_tipo
         )
 
@@ -393,7 +412,7 @@ class ArcaService:
         transport = Transport(session=session)
 
         # Seleccionamos el WSDL de WSFE según ambiente
-        wsdl = Config.ARCA_WSFE_URL + "?WSDL"
+        wsdl = self.wsfe_url + "?WSDL"
         client = Client(wsdl=wsdl, transport=transport)
 
         auth = {

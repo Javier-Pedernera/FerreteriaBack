@@ -19,19 +19,39 @@ class Config:
     MOVIMIENTOS_CLIENTE_ENABLED = os.getenv("MOVIMIENTOS_CLIENTE_ENABLED", "false").lower() == "true"
     
 # ARCA (ex AFIP)
+    # Estas URLs son fijas de AFIP (no dependen de la empresa), quedan
+    # siempre disponibles para que ArcaService elija según
+    # EmpresaFiscalConfig.ambiente en vez de depender de una sola variable
+    # de entorno global del proceso.
+    ARCA_WSAA_URL_PROD = "https://wsaa.afip.gov.ar/ws/services/LoginCms"
+    ARCA_WSFE_URL_PROD = "https://servicios1.afip.gov.ar/wsfev1/service.asmx"
+    ARCA_WSAA_URL_TEST = "https://wsaahomo.afip.gov.ar/ws/services/LoginCms"
+    ARCA_WSFE_URL_TEST = "https://wswhomo.afip.gov.ar/wsfev1/service.asmx"
+
+    # Certificados de fallback, siempre disponibles por ambiente (no
+    # condicionados a ARCA_ENV), para que si una EmpresaFiscalConfig no trae
+    # su propio cert_path/pfx_password, el fallback coincida con SU
+    # ambiente y no con el ARCA_ENV del proceso.
+    ARCA_PFX_PATH_PROD = os.getenv("ARCA_PFX_PROD")
+    ARCA_PFX_PASSWORD_PROD = os.getenv("ARCA_PFX_PROD_PASSWORD")
+    ARCA_PFX_PATH_TEST = os.getenv("ARCA_PFX_TEST")
+    ARCA_PFX_PASSWORD_TEST = os.getenv("ARCA_PFX_TEST_PASSWORD")
+
     ARCA_ENV = os.getenv("ARCA_ENV", "test")
     # print("Arca en el .env", ARCA_ENV)
     if ARCA_ENV == "prod":
+        # Usados como fallback si una EmpresaFiscalConfig no trae su propio
+        # cert_path/pfx_password cargado.
         ARCA_PFX_PATH = os.getenv("ARCA_PFX_PROD")
         ARCA_PFX_PASSWORD = os.getenv("ARCA_PFX_PROD_PASSWORD")
-        ARCA_WSAA_URL = "https://wsaa.afip.gov.ar/ws/services/LoginCms"
-        ARCA_WSFE_URL = "https://servicios1.afip.gov.ar/wsfev1/service.asmx"
+        ARCA_WSAA_URL = ARCA_WSAA_URL_PROD
+        ARCA_WSFE_URL = ARCA_WSFE_URL_PROD
     else:
         ARCA_PFX_PATH = os.getenv("ARCA_PFX_TEST")
         ARCA_PFX_PASSWORD = os.getenv("ARCA_PFX_TEST_PASSWORD")
-        ARCA_WSAA_URL = "https://wsaahomo.afip.gov.ar/ws/services/LoginCms"
-        ARCA_WSFE_URL = "https://wswhomo.afip.gov.ar/wsfev1/service.asmx"
-    
+        ARCA_WSAA_URL = ARCA_WSAA_URL_TEST
+        ARCA_WSFE_URL = ARCA_WSFE_URL_TEST
+
     ARCA_CUIT = os.getenv("ARCA_CUIT")
 
     @staticmethod

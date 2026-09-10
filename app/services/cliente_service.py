@@ -38,7 +38,9 @@ class ClienteService:
             telefono=data.get('telefono'),
             direccion=data.get('direccion'),
             estado_id=data['estado_id'],
-            cuenta_corriente_activa=data.get('cuenta_corriente_activa', False)
+            cuenta_corriente_activa=data.get('cuenta_corriente_activa', False),
+            tipo_documento_id=data.get('tipo_documento_id'),
+            condicion_iva_id=data.get('condicion_iva_id')
         )
         db.session.add(cliente)
         db.session.flush()  # Para que cliente tenga ID asignado antes del commit
@@ -73,6 +75,8 @@ class ClienteService:
         cliente.direccion = data.get('direccion', cliente.direccion)
         cliente.estado_id = data.get('estado_id', cliente.estado_id)
         cliente.cuenta_corriente_activa = data.get('cuenta_corriente_activa', cliente.cuenta_corriente_activa)
+        cliente.tipo_documento_id = data.get('tipo_documento_id', cliente.tipo_documento_id)
+        cliente.condicion_iva_id = data.get('condicion_iva_id', cliente.condicion_iva_id)
 
         # Manejo de personas autorizadas (si se envían)
         personas_data = data.get('personas_autorizadas')

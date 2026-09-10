@@ -201,10 +201,19 @@ class VentaService:
         return resultado
 
     @staticmethod
-    def obtener_filtradas(estado_code=None, fecha_str=None, page=1, per_page=10):
+    def obtener_filtradas(estado_code=None, fecha_str=None, page=1, per_page=10, cliente_id=None, facturada=None):
         query = Venta.query.join(Status, Venta.estado_id == Status.id)
 
         estado_deleted = Status.query.filter_by(code='deleted').first()
+
+        if cliente_id:
+            query = query.filter(Venta.cliente_id == cliente_id)
+
+        if facturada is not None:
+            if facturada:
+                query = query.filter(Venta.factura_id.isnot(None))
+            else:
+                query = query.filter(Venta.factura_id.is_(None))
 
         # 1️⃣ Manejo del estado
         if estado_code:

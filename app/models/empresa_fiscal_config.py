@@ -25,6 +25,8 @@ class EmpresaFiscalConfig(db.Model):
 
     cert_path = db.Column(db.String(255), nullable=False)
 
+    logo_url = db.Column(db.String(500), nullable=True)
+
     # 🔴 ESTA ES LA NUEVA COLUMNA
     pfx_password = db.Column(db.String(255), nullable=True)
 
@@ -40,5 +42,6 @@ class EmpresaFiscalConfig(db.Model):
             "puntos_venta": [pv.serialize() for pv in self.puntos_venta],
             "condicion_iva": self.condicion_iva.codigo if self.condicion_iva else None,
             "ambiente": self.ambiente,
-            "activo": self.activo
+            "activo": self.activo,
+            "logo_url": self.logo_url
         }
