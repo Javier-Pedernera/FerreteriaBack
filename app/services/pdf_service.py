@@ -189,11 +189,11 @@ def generar_pdf_factura(factura):
         "sec", parent=base["Heading5"], fontSize=8.5, textColor=colors.white,
         leading=11, spaceAfter=0, spaceBefore=0,
     )
-    centro = ParagraphStyle("c", parent=normal, alignment=TA_CENTER, fontSize=7)
-    letra_style = ParagraphStyle("l", parent=base["Title"], fontSize=26, alignment=TA_CENTER, leading=28)
-    original_style = ParagraphStyle("o", parent=normal, alignment=TA_CENTER, fontSize=6.5, textColor=COLOR_TEXTO_SUAVE)
-    comp_title = ParagraphStyle("ct", parent=base["Heading2"], fontSize=12, leading=14)
-    comp_line = ParagraphStyle("cl", parent=normal, fontSize=8.2, leading=11)
+    centro = ParagraphStyle("c", parent=normal, alignment=TA_CENTER, fontSize=7.7)
+    letra_style = ParagraphStyle("l", parent=base["Title"], fontSize=29, alignment=TA_CENTER, leading=31)
+    original_style = ParagraphStyle("o", parent=normal, alignment=TA_CENTER, fontSize=7, textColor=COLOR_TEXTO_SUAVE)
+    comp_title = ParagraphStyle("ct", parent=base["Heading2"], fontSize=13, leading=15)
+    comp_line = ParagraphStyle("cl", parent=normal, fontSize=9, leading=12)
     total_lbl = ParagraphStyle("tl", parent=base["Heading3"], fontSize=13, alignment=TA_RIGHT)
 
     try:
@@ -249,7 +249,7 @@ def generar_pdf_factura(factura):
             [Paragraph(tipo.letra if tipo else "-", letra_style)],
             [Paragraph(f"COD. {codigo_afip:03d}" if codigo_afip else "-", centro)],
         ],
-        colWidths=[20 * mm],
+        colWidths=[22 * mm],
     )
     col_letra.setStyle(TableStyle([
         ("BOX", (0, 1), (-1, -1), 1, COLOR_ACENTO),
@@ -274,8 +274,8 @@ def generar_pdf_factura(factura):
             f"<b>Inicio de actividades:</b> {_fmt_fecha(empresa.inicio_actividades)}", comp_line
         ))
 
-    w1 = ancho * 0.42
-    w2 = 28 * mm
+    w1 = ancho * 0.40
+    w2 = 30 * mm
     header = Table([[col_emisor, col_letra, col_comp]], colWidths=[w1, w2, ancho - w1 - w2])
     header.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
