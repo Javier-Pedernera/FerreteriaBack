@@ -124,3 +124,8 @@ static
 __pycache__/
 *.pyc
 app/static/uploads/excels/
+
+# Certificados / claves privadas (AFIP-ARCA) — nunca versionar
+certificados/
+*.pfx
+*.key
