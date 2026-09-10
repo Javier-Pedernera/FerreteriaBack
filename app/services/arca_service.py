@@ -250,24 +250,32 @@ class ArcaService:
 
         numero = ultimo_numero + 1
 
-        # 🔎 Cliente
+        # 🔎 Receptor: cliente registrado o datos sueltos / consumidor final
         cliente = factura.cliente
-        # print("CLIENTE:", cliente)
-        # print("CLIENTE TIPO DOC:", cliente.tipo_documento)
-        # print("CLIENTE COND IVA:", cliente.condicion_iva)
-        if not cliente.tipo_documento:
-            raise ValueError("El cliente no tiene tipo de documento asignado")
-        if not cliente.condicion_iva:
-            raise ValueError("El cliente no tiene condición IVA asignada")
-        doc_tipo = cliente.tipo_documento.codigo_afip
+        if cliente:
+            if not cliente.tipo_documento:
+                raise ValueError("El cliente no tiene tipo de documento asignado")
+            if not cliente.condicion_iva:
+                raise ValueError("El cliente no tiene condición IVA asignada")
+            doc_tipo = cliente.tipo_documento.codigo_afip
+            cond_iva_receptor = cliente.condicion_iva.codigo_afip
 
-        # Consumidor Final
-        if doc_tipo == 99:
-            doc_nro = 0
+            if doc_tipo == 99:
+                doc_nro = 0
+            else:
+                if not cliente.cuit:
+                    raise ValueError("El cliente no tiene número de documento/cuit")
+                doc_nro = int(cliente.cuit)
         else:
-            if not cliente.cuit:
-                raise ValueError("El cliente no tiene número de documento/cuit")
-            doc_nro = int(cliente.cuit)
+            # sin cliente -> consumidor final por defecto
+            doc_tipo = factura.receptor_doc_tipo or 99
+            cond_iva_receptor = factura.receptor_condicion_iva or 5  # 5 = Consumidor Final
+            if doc_tipo == 99:
+                doc_nro = 0
+            else:
+                if not factura.receptor_doc_nro:
+                    raise ValueError("Falta el número de documento del receptor")
+                doc_nro = int(factura.receptor_doc_nro)
         
         # print("TIPOS QUE SE ENVÍAN:")
         # print("DocTipo:", doc_tipo, type(doc_tipo))
@@ -289,7 +297,7 @@ class ArcaService:
             "ImpTrib": 0,
             "MonId": "PES",
             "MonCotiz": 1,
-            "CondicionIVAReceptorId": cliente.condicion_iva.codigo_afip
+            "CondicionIVAReceptorId": cond_iva_receptor
         }
         response = client.service.FECAESolicitar(
             Auth=auth,

@@ -29,17 +29,22 @@ def formatear_numero(punto_venta, numero):
     return f"{punto_venta:04d}-{numero:08d}"
 
 
-def _datos_receptor(cliente):
+def _datos_receptor(factura):
     """Mismo criterio que arca_service.wsfe_autorizar para DocTipo/DocNro."""
-    if not cliente or not cliente.tipo_documento:
-        return 99, 0
+    cliente = factura.cliente
+    if cliente:
+        if not cliente.tipo_documento:
+            return 99, 0
+        doc_tipo = cliente.tipo_documento.codigo_afip
+        if doc_tipo == 99 or not cliente.cuit:
+            return doc_tipo, 0
+        return doc_tipo, int(cliente.cuit)
 
-    doc_tipo = cliente.tipo_documento.codigo_afip
-    if doc_tipo == 99:
+    # sin cliente registrado
+    doc_tipo = factura.receptor_doc_tipo or 99
+    if doc_tipo == 99 or not factura.receptor_doc_nro:
         return doc_tipo, 0
-    if not cliente.cuit:
-        return doc_tipo, 0
-    return doc_tipo, int(cliente.cuit)
+    return doc_tipo, int(factura.receptor_doc_nro)
 
 
 def construir_url_qr_afip(factura, empresa):
@@ -47,8 +52,7 @@ def construir_url_qr_afip(factura, empresa):
     Arma la URL del QR exigido por AFIP (RG 4892) para comprobantes
     electrónicos: https://www.afip.gob.ar/fe/qr/?p=<json en base64>
     """
-    cliente = factura.cliente
-    doc_tipo, doc_nro = _datos_receptor(cliente)
+    doc_tipo, doc_nro = _datos_receptor(factura)
 
     fecha = factura.fecha_emision or (
         factura.fecha_creacion.date() if factura.fecha_creacion else None
@@ -106,17 +110,62 @@ def _logo_flowable(logo_url, alto=20 * mm):
         return None
 
 
-def _doc_receptor_texto(cliente):
-    if not cliente or not cliente.tipo_documento:
-        return "-"
-    if cliente.tipo_documento.codigo_afip == 99:
+DOC_TIPO_LABEL = {80: "CUIT", 86: "CUIL", 96: "DNI", 94: "Pasaporte", 99: "Consumidor Final"}
+COND_IVA_RECEPTOR_LABEL = {
+    1: "Responsable Inscripto", 4: "Sujeto Exento", 5: "Consumidor Final",
+    6: "Responsable Monotributo", 7: "Sujeto No Categorizado",
+}
+
+
+def _doc_receptor_texto(factura):
+    cliente = factura.cliente
+    if cliente:
+        if not cliente.tipo_documento:
+            return "-"
+        if cliente.tipo_documento.codigo_afip == 99:
+            return "Consumidor Final"
+        return f"{cliente.tipo_documento.descripcion}: {cliente.cuit or '-'}"
+
+    doc_tipo = factura.receptor_doc_tipo or 99
+    if doc_tipo == 99:
         return "Consumidor Final"
-    return f"{cliente.tipo_documento.descripcion}: {cliente.cuit or '-'}"
+    return f"{DOC_TIPO_LABEL.get(doc_tipo, doc_tipo)}: {factura.receptor_doc_nro or '-'}"
+
+
+def _fmt_fecha(d):
+    if not d:
+        return "-"
+    return d.strftime("%d/%m/%Y")
+
+
+def _fmt_pesos(v):
+    return f"$ {float(v or 0):,.2f}".replace(",", "@").replace(".", ",").replace("@", ".")
+
+
+def _condicion_venta(factura):
+    """Deriva la condición de venta de las ventas facturadas (forma de pago)."""
+    formas = {v.forma_pago.nombre for v in factura.ventas if getattr(v, "forma_pago", None)}
+    if len(formas) == 1:
+        return formas.pop()
+    if len(formas) > 1:
+        return "Varios"
+    return "Contado"
+
+
+def _numerar_pagina(canvas, doc):
+    canvas.saveState()
+    canvas.setFont("Helvetica", 7)
+    canvas.setFillColor(COLOR_TEXTO_SUAVE)
+    canvas.drawRightString(
+        doc.pagesize[0] - 25 * mm, 12 * mm, f"Página {doc.page}"
+    )
+    canvas.restoreState()
 
 
 def generar_pdf_factura(factura):
     """
-    Genera el PDF de una Factura real (modelo app.models.factura.Factura).
+    Genera el PDF de una Factura real (modelo app.models.factura.Factura),
+    con formato de factura electrónica argentina.
     """
     buffer = io.BytesIO()
 
@@ -125,22 +174,28 @@ def generar_pdf_factura(factura):
         pagesize=A4,
         rightMargin=25 * mm,
         leftMargin=25 * mm,
-        topMargin=15 * mm,
-        bottomMargin=15 * mm,
+        topMargin=14 * mm,
+        bottomMargin=18 * mm,
+        title=f"Factura {factura.numero_comprobante or factura.id}",
     )
 
-    elements = []
-    base = getSampleStyleSheet()
+    ancho = doc.width  # ancho útil de contenido
 
-    normal = ParagraphStyle("normal", parent=base["Normal"], fontSize=9, leading=13)
-    normal_suave = ParagraphStyle("normal_suave", parent=normal, textColor=COLOR_TEXTO_SUAVE)
-    etiqueta = ParagraphStyle("etiqueta", parent=normal, fontSize=8, textColor=COLOR_TEXTO_SUAVE)
-    razon_social_style = ParagraphStyle("razon_social", parent=base["Heading2"], fontSize=14, leading=16)
-    seccion = ParagraphStyle("seccion", parent=base["Heading4"], fontSize=10, textColor=COLOR_ACENTO, spaceAfter=4)
-    centrado = ParagraphStyle("centrado", parent=normal, alignment=TA_CENTER)
-    letra_grande = ParagraphStyle("letra_grande", parent=base["Title"], fontSize=34, alignment=TA_CENTER, leading=36)
-    derecha = ParagraphStyle("derecha", parent=normal, alignment=TA_RIGHT)
-    total_style = ParagraphStyle("total_style", parent=base["Heading2"], alignment=TA_RIGHT, fontSize=16)
+    base = getSampleStyleSheet()
+    normal = ParagraphStyle("n", parent=base["Normal"], fontSize=8.5, leading=12)
+    suave = ParagraphStyle("s", parent=normal, textColor=COLOR_TEXTO_SUAVE)
+    mini = ParagraphStyle("m", parent=normal, fontSize=7.5, textColor=COLOR_TEXTO_SUAVE)
+    etiqueta = ParagraphStyle("e", parent=normal, fontSize=7.5, textColor=COLOR_TEXTO_SUAVE)
+    nombre_style = ParagraphStyle("nom", parent=base["Heading2"], fontSize=15, leading=17)
+    seccion = ParagraphStyle(
+        "sec", parent=base["Heading5"], fontSize=8.5, textColor=colors.white,
+        leading=11, spaceAfter=0, spaceBefore=0,
+    )
+    centro = ParagraphStyle("c", parent=normal, alignment=TA_CENTER)
+    letra_style = ParagraphStyle("l", parent=base["Title"], fontSize=32, alignment=TA_CENTER, leading=34)
+    original_style = ParagraphStyle("o", parent=normal, alignment=TA_CENTER, fontSize=7, textColor=COLOR_TEXTO_SUAVE)
+    comp_title = ParagraphStyle("ct", parent=base["Heading2"], fontSize=13, leading=15)
+    total_lbl = ParagraphStyle("tl", parent=base["Heading3"], fontSize=13, alignment=TA_RIGHT)
 
     try:
         empresa = EmpresaFiscalService.get_empresa_activa()
@@ -150,178 +205,221 @@ def generar_pdf_factura(factura):
     cliente = factura.cliente
     tipo = factura.tipo_comprobante
 
-    punto_venta_numero = factura.punto_venta_emitido or (
+    pv_num = factura.punto_venta_emitido or (
         factura.punto_venta.numero if factura.punto_venta else None
     )
-    numero_formateado = formatear_numero(punto_venta_numero, factura.arca_numero_cbte)
+    numero_fmt = formatear_numero(pv_num, factura.arca_numero_cbte)
     fecha = factura.fecha_emision or (
         factura.fecha_creacion.date() if factura.fecha_creacion else None
     )
     codigo_afip = tipo.codigo_afip if tipo else factura.arca_tipo_cbte
+    domicilio_emisor = (empresa.domicilio if empresa and empresa.domicilio else None) or (
+        factura.punto_venta.direccion if factura.punto_venta else None
+    )
+
+    elements = []
 
     # =========================================================
-    # ENCABEZADO: logo + datos emisor  |  recuadro letra/n° comprobante
+    # ENCABEZADO — 3 columnas: emisor | recuadro letra | comprobante
     # =========================================================
     logo_img = _logo_flowable(empresa.logo_url if empresa else None)
 
-    datos_emisor = [
-        Paragraph(empresa.razon_social if empresa else "-", razon_social_style),
-        Paragraph(f"CUIT: {empresa.cuit if empresa else '-'}", normal),
-        Paragraph(
-            f"Condición frente al IVA: {empresa.condicion_iva.descripcion if empresa and empresa.condicion_iva else '-'}",
-            normal
-        ),
-    ]
-    if factura.punto_venta and factura.punto_venta.direccion:
-        datos_emisor.append(Paragraph(f"Domicilio comercial: {factura.punto_venta.direccion}", normal))
-
-    celda_emisor = []
+    razon_social = empresa.razon_social if empresa else "-"
+    col_emisor = []
     if logo_img:
-        celda_emisor.append(logo_img)
-        celda_emisor.append(Spacer(1, 6))
-    celda_emisor.extend(datos_emisor)
+        # Con logo, la identidad visual la da el logo: no repetimos el nombre
+        # en grande, solo la razón social como dato legal obligatorio.
+        col_emisor += [logo_img, Spacer(1, 6)]
+        col_emisor.append(Paragraph(f"Razón social: {razon_social}", normal))
+    else:
+        col_emisor.append(Paragraph(
+            (empresa.nombre_fantasia or razon_social) if empresa else "-", nombre_style
+        ))
+        if empresa and empresa.nombre_fantasia and empresa.nombre_fantasia != razon_social:
+            col_emisor.append(Paragraph(f"Razón social: {razon_social}", normal))
+    col_emisor.append(Paragraph(
+        f"Condición frente al IVA: {empresa.condicion_iva.descripcion if empresa and empresa.condicion_iva else '-'}",
+        normal
+    ))
+    if domicilio_emisor:
+        col_emisor.append(Paragraph(f"Domicilio comercial: {domicilio_emisor}", normal))
 
-    letra = tipo.letra if tipo else "-"
-    recuadro_tipo = Table(
+    col_letra = Table(
         [
-            [Paragraph(letra, letra_grande)],
-            [Paragraph(f"COD. {codigo_afip:03d}" if codigo_afip else "-", centrado)],
+            [Paragraph("ORIGINAL", original_style)],
+            [Paragraph(tipo.letra if tipo else "-", letra_style)],
+            [Paragraph(f"COD. {codigo_afip:03d}" if codigo_afip else "-", centro)],
         ],
-        colWidths=[28 * mm],
+        colWidths=[24 * mm],
     )
-    recuadro_tipo.setStyle(TableStyle([
-        ("BOX", (0, 0), (-1, -1), 1.2, COLOR_ACENTO),
-        ("LINEBELOW", (0, 0), (-1, 0), 1, COLOR_ACENTO),
+    col_letra.setStyle(TableStyle([
+        ("BOX", (0, 1), (-1, -1), 1.2, COLOR_ACENTO),
+        ("LINEBELOW", (0, 1), (-1, 1), 1, COLOR_ACENTO),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING", (0, 0), (-1, 0), 4),
-        ("BOTTOMPADDING", (0, 1), (-1, 1), 4),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
     ]))
 
-    datos_comprobante = [
-        recuadro_tipo,
-        Spacer(1, 6),
-        Paragraph(f"<b>{tipo.descripcion if tipo else 'Comprobante'}</b>", centrado),
-        Paragraph(f"N° {numero_formateado}", centrado),
-        Paragraph(f"Fecha de emisión: {fecha.isoformat() if fecha else '-'}", centrado),
+    col_comp = [
+        Paragraph(f"<b>{(tipo.descripcion if tipo else 'COMPROBANTE').upper()}</b>", comp_title),
+        Spacer(1, 4),
+        Paragraph(f"<b>N°:</b> {numero_fmt}", normal),
+        Paragraph(f"<b>Fecha de emisión:</b> {_fmt_fecha(fecha)}", normal),
+        Spacer(1, 4),
+        Paragraph(f"<b>CUIT:</b> {empresa.cuit if empresa else '-'}", normal),
     ]
+    if empresa and empresa.ingresos_brutos:
+        col_comp.append(Paragraph(f"<b>Ingresos Brutos:</b> {empresa.ingresos_brutos}", normal))
+    if empresa and empresa.inicio_actividades:
+        col_comp.append(Paragraph(
+            f"<b>Inicio de actividades:</b> {_fmt_fecha(empresa.inicio_actividades)}", normal
+        ))
 
-    header_table = Table(
-        [[celda_emisor, datos_comprobante]],
-        colWidths=[105 * mm, 55 * mm],
-    )
-    header_table.setStyle(TableStyle([
+    w1 = ancho * 0.44
+    w2 = 24 * mm
+    header = Table([[col_emisor, col_letra, col_comp]], colWidths=[w1, w2, ancho - w1 - w2])
+    header.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("ALIGN", (1, 0), (1, 0), "CENTER"),
+        ("LINEAFTER", (0, 0), (0, 0), 0.6, COLOR_TEXTO_SUAVE),
+        ("LEFTPADDING", (2, 0), (2, 0), 12),
     ]))
-    elements.append(header_table)
-    elements.append(Spacer(1, 10))
-    elements.append(HRFlowable(width="100%", thickness=1, color=COLOR_ACENTO))
-    elements.append(Spacer(1, 10))
+    elements += [header, Spacer(1, 8),
+                 HRFlowable(width="100%", thickness=1.2, color=COLOR_ACENTO), Spacer(1, 10)]
 
     # =========================================================
-    # DATOS DEL CLIENTE
+    # DATOS DEL RECEPTOR
     # =========================================================
-    elements.append(Paragraph("DATOS DEL CLIENTE", seccion))
+    def barra_seccion(texto):
+        t = Table([[Paragraph(texto, seccion)]], colWidths=[ancho])
+        t.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), COLOR_ACENTO),
+            ("LEFTPADDING", (0, 0), (-1, -1), 8),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ]))
+        return t
 
-    filas_cliente = [
-        [Paragraph("Cliente:", etiqueta), Paragraph(cliente.nombre if cliente else "-", normal)],
-        [Paragraph("Documento:", etiqueta), Paragraph(_doc_receptor_texto(cliente), normal)],
-        [Paragraph("Condición IVA:", etiqueta), Paragraph(
-            cliente.condicion_iva.descripcion if cliente and cliente.condicion_iva else "-", normal
-        )],
+    elements += [barra_seccion("DATOS DEL RECEPTOR"), Spacer(1, 6)]
+
+    if cliente and cliente.condicion_iva:
+        cond_iva_txt = cliente.condicion_iva.descripcion
+    else:
+        cond_iva_txt = COND_IVA_RECEPTOR_LABEL.get(
+            factura.receptor_condicion_iva or 5, "Consumidor Final"
+        )
+
+    filas_rec = [
+        [Paragraph("Receptor:", etiqueta), Paragraph(factura.receptor_display(), normal),
+         Paragraph("Condición IVA:", etiqueta), Paragraph(cond_iva_txt, normal)],
+        [Paragraph("Documento:", etiqueta), Paragraph(_doc_receptor_texto(factura), normal),
+         Paragraph("Condición de venta:", etiqueta), Paragraph(_condicion_venta(factura), normal)],
     ]
     if cliente and cliente.direccion:
-        filas_cliente.append([Paragraph("Domicilio:", etiqueta), Paragraph(cliente.direccion, normal)])
+        filas_rec.append([Paragraph("Domicilio:", etiqueta),
+                          Paragraph(cliente.direccion, normal), "", ""])
 
-    tabla_cliente = Table(filas_cliente, colWidths=[30 * mm, 130 * mm])
-    tabla_cliente.setStyle(TableStyle([
+    tabla_rec = Table(filas_rec, colWidths=[ancho * 0.13, ancho * 0.37, ancho * 0.18, ancho * 0.32])
+    tabla_rec.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, -1), COLOR_ACENTO_SUAVE),
-        ("BOX", (0, 0), (-1, -1), 0.5, COLOR_ACENTO),
+        ("BOX", (0, 0), (-1, -1), 0.5, COLOR_TEXTO_SUAVE),
         ("LEFTPADDING", (0, 0), (-1, -1), 8),
         ("TOPPADDING", (0, 0), (-1, -1), 4),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
     ]))
-    elements.append(tabla_cliente)
-    elements.append(Spacer(1, 16))
+    elements += [tabla_rec, Spacer(1, 14)]
 
     # =========================================================
-    # TABLA DE ITEMS
+    # DETALLE
     # =========================================================
-    elements.append(Paragraph("DETALLE", seccion))
+    elements += [barra_seccion("DETALLE"), Spacer(1, 6)]
 
     data = [["Código", "Descripción", "Cant.", "P. Unitario", "Subtotal"]]
     for item in factura.items:
         producto = item.producto
         data.append([
             producto.cod_interno if producto else "-",
-            item.descripcion,
+            Paragraph(item.descripcion, normal),
             f"{item.cantidad:g}",
-            f"$ {item.precio_unitario:,.2f}",
-            f"$ {item.subtotal:,.2f}",
+            _fmt_pesos(item.precio_unitario),
+            _fmt_pesos(item.subtotal),
         ])
 
-    tabla_items = Table(
-        data,
-        colWidths=[25 * mm, 70 * mm, 15 * mm, 30 * mm, 30 * mm],
-        repeatRows=1,
-    )
-    estilo_items = [
+    cw = [ancho * 0.16, ancho * 0.44, ancho * 0.10, ancho * 0.15, ancho * 0.15]
+    tabla_items = Table(data, colWidths=cw, repeatRows=1)
+    estilo = [
         ("BACKGROUND", (0, 0), (-1, 0), COLOR_ACENTO),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 8.5),
         ("ALIGN", (2, 0), (-1, -1), "RIGHT"),
-        ("ALIGN", (0, 0), (1, -1), "LEFT"),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#c7cbd1")),
+        ("ALIGN", (0, 0), (0, -1), "LEFT"),
+        ("LINEBELOW", (0, 0), (-1, 0), 0.8, COLOR_ACENTO),
+        ("LINEBELOW", (0, 1), (-1, -1), 0.4, colors.HexColor("#d6d9de")),
         ("TOPPADDING", (0, 0), (-1, -1), 5),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
     ]
     for i in range(1, len(data)):
         if i % 2 == 0:
-            estilo_items.append(("BACKGROUND", (0, i), (-1, i), colors.HexColor("#f5f6f8")))
-    tabla_items.setStyle(TableStyle(estilo_items))
-
-    elements.append(tabla_items)
-    elements.append(Spacer(1, 12))
+            estilo.append(("BACKGROUND", (0, i), (-1, i), colors.HexColor("#f6f7f9")))
+    tabla_items.setStyle(TableStyle(estilo))
+    elements += [tabla_items, Spacer(1, 10)]
 
     # =========================================================
-    # TOTALES
+    # TOTALES — caja a la derecha
     # =========================================================
-    elements.append(Paragraph(f"TOTAL: $ {float(factura.total):,.2f}", total_style))
+    filas_total = []
+    if tipo and tipo.letra == "A":
+        # (para cuando se implemente IVA discriminado)
+        filas_total.append(
+            [Paragraph("Subtotal", total_lbl), Paragraph(_fmt_pesos(factura.total), total_lbl)]
+        )
+    filas_total.append(
+        [Paragraph("<b>TOTAL</b>", total_lbl), Paragraph(f"<b>{_fmt_pesos(factura.total)}</b>", total_lbl)]
+    )
+    caja_total = Table(filas_total, colWidths=[ancho * 0.20, ancho * 0.20], hAlign="RIGHT")
+    caja_total.setStyle(TableStyle([
+        ("BOX", (0, 0), (-1, -1), 0.8, COLOR_ACENTO),
+        ("BACKGROUND", (0, -1), (-1, -1), COLOR_ACENTO_SUAVE),
+        ("LINEABOVE", (0, -1), (-1, -1), 0.4, colors.HexColor("#d6d9de")),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+    ]))
+    elements.append(caja_total)
     if tipo and tipo.letra in ("B", "C"):
-        elements.append(Paragraph("El IVA está incluido en los precios (no se discrimina).", normal_suave))
-    elements.append(Spacer(1, 20))
-    elements.append(HRFlowable(width="100%", thickness=1, color=COLOR_ACENTO))
-    elements.append(Spacer(1, 12))
+        elements += [Spacer(1, 4),
+                     Paragraph("Los importes incluyen IVA. Comprobante sin discriminación de IVA "
+                               "(Régimen Simplificado / Consumidor Final).", mini)]
+    elements.append(Spacer(1, 18))
 
     # =========================================================
-    # CAE + QR
+    # PIE — CAE + QR
     # =========================================================
     if factura.arca_cae:
         qr_url = construir_url_qr_afip(factura, empresa)
         info_cae = [
-            Paragraph("<b>COMPROBANTE AUTORIZADO</b>", normal),
-            Spacer(1, 4),
-            Paragraph(f"CAE N°: {factura.arca_cae}", normal),
-            Paragraph(
-                f"Vencimiento CAE: {factura.arca_cae_vto.isoformat() if factura.arca_cae_vto else '-'}",
-                normal
-            ),
+            Paragraph("<b>Comprobante Autorizado</b>", normal),
+            Spacer(1, 3),
+            Paragraph(f"CAE N°: <b>{factura.arca_cae}</b>", normal),
+            Paragraph(f"Vencimiento del CAE: {_fmt_fecha(factura.arca_cae_vto)}", normal),
         ]
-        pie_tabla = Table(
-            [[info_cae, _qr_drawing(qr_url)]],
-            colWidths=[110 * mm, 35 * mm],
-        )
-        pie_tabla.setStyle(TableStyle([
+        pie = Table([[_qr_drawing(qr_url, 30 * mm), info_cae]], colWidths=[34 * mm, ancho - 34 * mm])
+        pie.setStyle(TableStyle([
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+            ("BOX", (0, 0), (-1, -1), 0.6, COLOR_TEXTO_SUAVE),
+            ("LEFTPADDING", (1, 0), (1, 0), 12),
+            ("TOPPADDING", (0, 0), (-1, -1), 8),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
         ]))
-        elements.append(pie_tabla)
+        elements.append(pie)
     else:
-        elements.append(Paragraph("Comprobante pendiente de autorización ante AFIP.", normal_suave))
+        elements.append(Paragraph("Comprobante pendiente de autorización ante AFIP.", suave))
 
-    doc.build(elements)
+    doc.build(elements, onFirstPage=_numerar_pagina, onLaterPages=_numerar_pagina)
 
     pdf = buffer.getvalue()
     buffer.close()
-
     return pdf

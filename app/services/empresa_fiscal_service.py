@@ -30,8 +30,11 @@ class EmpresaFiscalService:
 
         empresa = EmpresaFiscalConfig(
             razon_social=data["razon_social"],
+            nombre_fantasia=data.get("nombre_fantasia"),
             cuit=data["cuit"],
-            # punto_venta=data["punto_venta"],
+            domicilio=data.get("domicilio"),
+            ingresos_brutos=data.get("ingresos_brutos"),
+            inicio_actividades=data.get("inicio_actividades"),
             condicion_iva_id=data["condicion_iva_id"],
             cert_path=data["cert_path"],
             pfx_password=data["pfx_password"],  # ✅ NUEVO
@@ -58,7 +61,11 @@ class EmpresaFiscalService:
             ).update({"activo": False})
 
         empresa.razon_social = data.get("razon_social", empresa.razon_social)
+        empresa.nombre_fantasia = data.get("nombre_fantasia", empresa.nombre_fantasia)
         empresa.cuit = data.get("cuit", empresa.cuit)
+        empresa.domicilio = data.get("domicilio", empresa.domicilio)
+        empresa.ingresos_brutos = data.get("ingresos_brutos", empresa.ingresos_brutos)
+        empresa.inicio_actividades = data.get("inicio_actividades", empresa.inicio_actividades)
         empresa.condicion_iva_id = data.get("condicion_iva_id", empresa.condicion_iva_id)
         empresa.cert_path = data.get("cert_path", empresa.cert_path)
         empresa.pfx_password = data.get("pfx_password", empresa.pfx_password)  # ✅ NUEVO

@@ -12,10 +12,18 @@ from app.services.empresa_fiscal_service import EmpresaFiscalService
 class FacturacionService:
 
     @staticmethod
-    def crear_factura_desde_ventas(cliente_id, ventas_ids,punto_venta_id, tipo_comprobante_id=None):
+    def crear_factura_desde_ventas(cliente_id, ventas_ids, punto_venta_id, tipo_comprobante_id=None, receptor=None):
         """
-        Crea una factura para un cliente unificando varias ventas.
+        Crea una factura unificando varias ventas.
+
+        Si cliente_id es None -> factura a mostrador / consumidor final: las
+        ventas deben tener cliente_id NULL, y los datos del receptor se toman
+        de `receptor` (dict opcional con receptor_nombre, receptor_doc_tipo,
+        receptor_doc_nro, receptor_condicion_iva, todos códigos AFIP). Si no
+        se pasa `receptor`, queda como Consumidor Final sin identificar.
         """
+        receptor = receptor or {}
+
         punto_venta = PuntoVenta.query.get(punto_venta_id)
 
         if not punto_venta:
@@ -26,21 +34,24 @@ class FacturacionService:
             .scalar()
 
         # traer ventas válidas
-        ventas = (
+        query = (
             Venta.query
             .filter(Venta.id.in_(ventas_ids))
-            .filter(Venta.cliente_id == cliente_id)  # filtramos por cliente
             .filter(Venta.estado_id != deleted_status_id)
-            .all()
         )
+        if cliente_id:
+            query = query.filter(Venta.cliente_id == cliente_id)
+        else:
+            query = query.filter(Venta.cliente_id.is_(None))
+        ventas = query.all()
 
         if not ventas:
-            raise ValueError("No se encontraron ventas para ese cliente")
+            raise ValueError("No se encontraron ventas para facturar")
 
-        # verificar que todas las ventas sean del mismo cliente (redundante pero seguro)
+        # verificar que todas las ventas tengan el mismo receptor
         clientes = {v.cliente_id for v in ventas}
         if len(clientes) != 1:
-            raise ValueError("Todas las ventas deben ser del mismo cliente")
+            raise ValueError("Todas las ventas deben ser del mismo cliente (o todas de mostrador)")
 
         # verificar que ninguna ya esté facturada
         if any(v.factura_id for v in ventas):
@@ -65,7 +76,11 @@ class FacturacionService:
             total=Decimal(total),
             estado="pendiente",
             tipo_comprobante_id=tipo_comprobante_id,
-            punto_venta_id=punto_venta_id
+            punto_venta_id=punto_venta_id,
+            receptor_nombre=receptor.get("receptor_nombre") if not cliente_id else None,
+            receptor_doc_tipo=receptor.get("receptor_doc_tipo") if not cliente_id else None,
+            receptor_doc_nro=receptor.get("receptor_doc_nro") if not cliente_id else None,
+            receptor_condicion_iva=receptor.get("receptor_condicion_iva") if not cliente_id else None,
         )
 
         db.session.add(factura)

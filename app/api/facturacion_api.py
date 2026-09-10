@@ -17,14 +17,19 @@ facturacion_api = Blueprint('facturacion_api', __name__)
 def crear_factura():
     data = request.get_json()
 
-    cliente_id = data.get("cliente_id")
+    cliente_id = data.get("cliente_id")  # opcional: si falta -> factura a mostrador / consumidor final
     ventas_ids = data.get("ventas_ids")
     tipo_comprobante_id = data.get("tipo_comprobante_id")
     punto_venta_id = data.get("punto_venta_id")
-    if not cliente_id or not ventas_ids:
-        return jsonify({
-            "message": "cliente_id y ventas_ids son obligatorios"
-        }), 400
+    if not ventas_ids:
+        return jsonify({"message": "ventas_ids es obligatorio"}), 400
+
+    receptor = {
+        "receptor_nombre": data.get("receptor_nombre"),
+        "receptor_doc_tipo": data.get("receptor_doc_tipo"),
+        "receptor_doc_nro": data.get("receptor_doc_nro"),
+        "receptor_condicion_iva": data.get("receptor_condicion_iva"),
+    }
 
     try:
         factura = FacturacionService.crear_factura_desde_ventas(
@@ -32,6 +37,7 @@ def crear_factura():
             ventas_ids,
             punto_venta_id,
             tipo_comprobante_id,
+            receptor,
         )
 
         return jsonify(factura.serialize()), 201

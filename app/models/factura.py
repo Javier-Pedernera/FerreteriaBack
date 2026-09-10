@@ -10,8 +10,19 @@ class Factura(db.Model):
     cliente_id = db.Column(
         db.Integer,
         db.ForeignKey("clientes.id"),
-        nullable=False
+        nullable=True
     )
+
+    # Receptor cuando NO hay cliente registrado (venta de mostrador /
+    # consumidor final). Si cliente_id está seteado, se ignoran estos campos
+    # y los datos salen del Cliente. Guardan códigos AFIP directamente:
+    #   receptor_doc_tipo: 99 = consumidor final, 96 = DNI, 80 = CUIT...
+    #   receptor_condicion_iva: código de FEParamGetCondicionIvaReceptor
+    #                           (5 = Consumidor Final)
+    receptor_nombre = db.Column(db.String(150))
+    receptor_doc_tipo = db.Column(db.Integer)
+    receptor_doc_nro = db.Column(db.String(20))
+    receptor_condicion_iva = db.Column(db.Integer)
 
     # 🔹 NUEVO — tipo profesional de comprobante
     tipo_comprobante_id = db.Column(
@@ -81,10 +92,21 @@ class Factura(db.Model):
     # SERIALIZE
     # -------------------------
 
+    def receptor_display(self):
+        """Nombre a mostrar del receptor: cliente registrado, dato suelto, o Consumidor Final."""
+        if self.cliente:
+            return self.cliente.nombre
+        return self.receptor_nombre or "Consumidor Final"
+
     def serialize(self):
         return {
             "id": self.id,
             "cliente_id": self.cliente_id,
+            "receptor_nombre": self.receptor_nombre,
+            "receptor_doc_tipo": self.receptor_doc_tipo,
+            "receptor_doc_nro": self.receptor_doc_nro,
+            "receptor_condicion_iva": self.receptor_condicion_iva,
+            "receptor": self.receptor_display(),
             "fecha": self.fecha_creacion.isoformat(),
             "fecha_emision": self.fecha_emision.isoformat() if self.fecha_emision else None,
             "total": float(self.total),

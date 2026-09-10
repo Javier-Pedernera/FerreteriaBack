@@ -1,3 +1,5 @@
+from datetime import date
+
 from app import db
 
 class EmpresaFiscalConfig(db.Model):
@@ -6,7 +8,13 @@ class EmpresaFiscalConfig(db.Model):
     id = db.Column(db.Integer, primary_key=True)
 
     razon_social = db.Column(db.String(150), nullable=False)
+    nombre_fantasia = db.Column(db.String(150), nullable=True)
     cuit = db.Column(db.String(20), nullable=False, unique=True)
+
+    # Datos que van impresos en la factura (RG 1415). Opcionales.
+    domicilio = db.Column(db.String(200), nullable=True)
+    ingresos_brutos = db.Column(db.String(50), nullable=True)
+    inicio_actividades = db.Column(db.Date, nullable=True)
 
     puntos_venta = db.relationship(
         "PuntoVenta",
@@ -38,7 +46,11 @@ class EmpresaFiscalConfig(db.Model):
         return {
             "id": self.id,
             "razon_social": self.razon_social,
+            "nombre_fantasia": self.nombre_fantasia,
             "cuit": self.cuit,
+            "domicilio": self.domicilio,
+            "ingresos_brutos": self.ingresos_brutos,
+            "inicio_actividades": self.inicio_actividades.isoformat() if self.inicio_actividades else None,
             "puntos_venta": [pv.serialize() for pv in self.puntos_venta],
             "condicion_iva": self.condicion_iva.codigo if self.condicion_iva else None,
             "ambiente": self.ambiente,
