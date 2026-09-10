@@ -192,7 +192,8 @@ def generar_pdf_factura(factura):
     centro = ParagraphStyle("c", parent=normal, alignment=TA_CENTER)
     letra_style = ParagraphStyle("l", parent=base["Title"], fontSize=32, alignment=TA_CENTER, leading=34)
     original_style = ParagraphStyle("o", parent=normal, alignment=TA_CENTER, fontSize=7, textColor=COLOR_TEXTO_SUAVE)
-    comp_title = ParagraphStyle("ct", parent=base["Heading2"], fontSize=13, leading=15)
+    comp_title = ParagraphStyle("ct", parent=base["Heading2"], fontSize=13, leading=15, alignment=TA_RIGHT)
+    normal_r = ParagraphStyle("nr", parent=normal, alignment=TA_RIGHT)
     total_lbl = ParagraphStyle("tl", parent=base["Heading3"], fontSize=13, alignment=TA_RIGHT)
 
     try:
@@ -261,26 +262,26 @@ def generar_pdf_factura(factura):
     col_comp = [
         Paragraph(f"<b>{(tipo.descripcion if tipo else 'COMPROBANTE').upper()}</b>", comp_title),
         Spacer(1, 4),
-        Paragraph(f"<b>N°:</b> {numero_fmt}", normal),
-        Paragraph(f"<b>Fecha de emisión:</b> {_fmt_fecha(fecha)}", normal),
+        Paragraph(f"<b>N°:</b> {numero_fmt}", normal_r),
+        Paragraph(f"<b>Fecha de emisión:</b> {_fmt_fecha(fecha)}", normal_r),
         Spacer(1, 4),
-        Paragraph(f"<b>CUIT:</b> {empresa.cuit if empresa else '-'}", normal),
+        Paragraph(f"<b>CUIT:</b> {empresa.cuit if empresa else '-'}", normal_r),
     ]
     if empresa and empresa.ingresos_brutos:
-        col_comp.append(Paragraph(f"<b>Ingresos Brutos:</b> {empresa.ingresos_brutos}", normal))
+        col_comp.append(Paragraph(f"<b>Ingresos Brutos:</b> {empresa.ingresos_brutos}", normal_r))
     if empresa and empresa.inicio_actividades:
         col_comp.append(Paragraph(
-            f"<b>Inicio de actividades:</b> {_fmt_fecha(empresa.inicio_actividades)}", normal
+            f"<b>Inicio de actividades:</b> {_fmt_fecha(empresa.inicio_actividades)}", normal_r
         ))
 
-    w1 = ancho * 0.44
+    w1 = ancho * 0.46
     w2 = 24 * mm
     header = Table([[col_emisor, col_letra, col_comp]], colWidths=[w1, w2, ancho - w1 - w2])
     header.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("ALIGN", (1, 0), (1, 0), "CENTER"),
         ("LINEAFTER", (0, 0), (0, 0), 0.6, COLOR_TEXTO_SUAVE),
-        ("LEFTPADDING", (2, 0), (2, 0), 12),
+        ("RIGHTPADDING", (2, 0), (2, 0), 2),
     ]))
     elements += [header, Spacer(1, 8),
                  HRFlowable(width="100%", thickness=1.2, color=COLOR_ACENTO), Spacer(1, 10)]
