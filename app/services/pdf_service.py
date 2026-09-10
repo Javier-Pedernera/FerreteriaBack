@@ -189,10 +189,11 @@ def generar_pdf_factura(factura):
         "sec", parent=base["Heading5"], fontSize=8.5, textColor=colors.white,
         leading=11, spaceAfter=0, spaceBefore=0,
     )
-    centro = ParagraphStyle("c", parent=normal, alignment=TA_CENTER)
-    letra_style = ParagraphStyle("l", parent=base["Title"], fontSize=32, alignment=TA_CENTER, leading=34)
-    original_style = ParagraphStyle("o", parent=normal, alignment=TA_CENTER, fontSize=7, textColor=COLOR_TEXTO_SUAVE)
-    comp_title = ParagraphStyle("ct", parent=base["Heading2"], fontSize=13, leading=15)
+    centro = ParagraphStyle("c", parent=normal, alignment=TA_CENTER, fontSize=6.5)
+    letra_style = ParagraphStyle("l", parent=base["Title"], fontSize=24, alignment=TA_CENTER, leading=26)
+    original_style = ParagraphStyle("o", parent=normal, alignment=TA_CENTER, fontSize=6, textColor=COLOR_TEXTO_SUAVE)
+    comp_title = ParagraphStyle("ct", parent=base["Heading2"], fontSize=11, leading=13)
+    comp_line = ParagraphStyle("cl", parent=normal, fontSize=7.5, leading=10)
     total_lbl = ParagraphStyle("tl", parent=base["Heading3"], fontSize=13, alignment=TA_RIGHT)
 
     try:
@@ -248,33 +249,33 @@ def generar_pdf_factura(factura):
             [Paragraph(tipo.letra if tipo else "-", letra_style)],
             [Paragraph(f"COD. {codigo_afip:03d}" if codigo_afip else "-", centro)],
         ],
-        colWidths=[24 * mm],
+        colWidths=[18 * mm],
     )
     col_letra.setStyle(TableStyle([
-        ("BOX", (0, 1), (-1, -1), 1.2, COLOR_ACENTO),
-        ("LINEBELOW", (0, 1), (-1, 1), 1, COLOR_ACENTO),
+        ("BOX", (0, 1), (-1, -1), 1, COLOR_ACENTO),
+        ("LINEBELOW", (0, 1), (-1, 1), 0.8, COLOR_ACENTO),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING", (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ("TOPPADDING", (0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
     ]))
 
     col_comp = [
         Paragraph(f"<b>{(tipo.descripcion if tipo else 'COMPROBANTE').upper()}</b>", comp_title),
-        Spacer(1, 4),
-        Paragraph(f"<b>N°:</b> {numero_fmt}", normal),
-        Paragraph(f"<b>Fecha de emisión:</b> {_fmt_fecha(fecha)}", normal),
-        Spacer(1, 4),
-        Paragraph(f"<b>CUIT:</b> {empresa.cuit if empresa else '-'}", normal),
+        Spacer(1, 3),
+        Paragraph(f"<b>N°:</b> {numero_fmt}", comp_line),
+        Paragraph(f"<b>Fecha de emisión:</b> {_fmt_fecha(fecha)}", comp_line),
+        Spacer(1, 3),
+        Paragraph(f"<b>CUIT:</b> {empresa.cuit if empresa else '-'}", comp_line),
     ]
     if empresa and empresa.ingresos_brutos:
-        col_comp.append(Paragraph(f"<b>Ingresos Brutos:</b> {empresa.ingresos_brutos}", normal))
+        col_comp.append(Paragraph(f"<b>Ingresos Brutos:</b> {empresa.ingresos_brutos}", comp_line))
     if empresa and empresa.inicio_actividades:
         col_comp.append(Paragraph(
-            f"<b>Inicio de actividades:</b> {_fmt_fecha(empresa.inicio_actividades)}", normal
+            f"<b>Inicio de actividades:</b> {_fmt_fecha(empresa.inicio_actividades)}", comp_line
         ))
 
-    w1 = ancho * 0.40
-    w2 = 32 * mm
+    w1 = ancho * 0.42
+    w2 = 26 * mm
     header = Table([[col_emisor, col_letra, col_comp]], colWidths=[w1, w2, ancho - w1 - w2])
     header.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
