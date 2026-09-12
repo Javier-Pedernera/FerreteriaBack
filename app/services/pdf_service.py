@@ -117,17 +117,30 @@ COND_IVA_RECEPTOR_LABEL = {
 }
 
 
-def _doc_receptor_texto(factura):
+def _tipo_doc_texto(factura):
+    cliente = factura.cliente
+    if cliente:
+        if not cliente.tipo_documento or cliente.tipo_documento.codigo_afip == 99:
+            return "Consumidor Final"
+        return cliente.tipo_documento.descripcion
+
+    doc_tipo = factura.receptor_doc_tipo or 99
+    if doc_tipo == 99:
+        return "Consumidor Final"
+    return DOC_TIPO_LABEL.get(doc_tipo, str(doc_tipo))
+
+
+def _numero_doc_texto(factura):
     cliente = factura.cliente
     if cliente:
         if not cliente.tipo_documento or cliente.tipo_documento.codigo_afip == 99:
             return "—"
-        return f"{cliente.tipo_documento.descripcion}: {cliente.cuit or '—'}"
+        return cliente.cuit or "—"
 
     doc_tipo = factura.receptor_doc_tipo or 99
     if doc_tipo == 99:
         return "—"
-    return f"{DOC_TIPO_LABEL.get(doc_tipo, doc_tipo)}: {factura.receptor_doc_nro or '—'}"
+    return factura.receptor_doc_nro or "—"
 
 
 def _fmt_fecha(d):
@@ -313,14 +326,15 @@ def generar_pdf_factura(factura):
     filas_rec = [
         [Paragraph("Receptor:", etiqueta), Paragraph(factura.receptor_display(), normal),
          Paragraph("Condición IVA:", etiqueta), Paragraph(cond_iva_txt, normal)],
-        [Paragraph("Documento:", etiqueta), Paragraph(_doc_receptor_texto(factura), normal),
-         Paragraph("Condición de venta:", etiqueta), Paragraph(_condicion_venta(factura), normal)],
+        [Paragraph("Tipo de documento:", etiqueta), Paragraph(_tipo_doc_texto(factura), normal),
+         Paragraph("Número:", etiqueta), Paragraph(_numero_doc_texto(factura), normal)],
+        [Paragraph("Condición de venta:", etiqueta), Paragraph(_condicion_venta(factura), normal), "", ""],
     ]
     if cliente and cliente.direccion:
         filas_rec.append([Paragraph("Domicilio:", etiqueta),
                           Paragraph(cliente.direccion, normal), "", ""])
 
-    tabla_rec = Table(filas_rec, colWidths=[ancho * 0.13, ancho * 0.37, ancho * 0.18, ancho * 0.32])
+    tabla_rec = Table(filas_rec, colWidths=[ancho * 0.20, ancho * 0.30, ancho * 0.16, ancho * 0.34])
     tabla_rec.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, -1), COLOR_ACENTO_SUAVE),
         ("BOX", (0, 0), (-1, -1), 0.5, COLOR_TEXTO_SUAVE),
