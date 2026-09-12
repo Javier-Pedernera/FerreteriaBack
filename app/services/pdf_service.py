@@ -130,16 +130,30 @@ def _tipo_doc_texto(factura):
     return DOC_TIPO_LABEL.get(doc_tipo, str(doc_tipo))
 
 
+def _fmt_cuit(numero):
+    """CUIT de 11 dígitos -> XX-XXXXXXXX-X. Si no tiene 11 dígitos, se devuelve tal cual."""
+    if not numero:
+        return numero
+    digitos = "".join(c for c in str(numero) if c.isdigit())
+    if len(digitos) != 11:
+        return str(numero)
+    return f"{digitos[:2]}-{digitos[2:10]}-{digitos[10:]}"
+
+
 def _numero_doc_texto(factura):
     cliente = factura.cliente
     if cliente:
         if not cliente.tipo_documento or cliente.tipo_documento.codigo_afip == 99:
             return "—"
+        if cliente.tipo_documento.codigo_afip == 80:  # CUIT
+            return _fmt_cuit(cliente.cuit) or "—"
         return cliente.cuit or "—"
 
     doc_tipo = factura.receptor_doc_tipo or 99
     if doc_tipo == 99:
         return "—"
+    if doc_tipo == 80:  # CUIT
+        return _fmt_cuit(factura.receptor_doc_nro) or "—"
     return factura.receptor_doc_nro or "—"
 
 
@@ -278,7 +292,7 @@ def generar_pdf_factura(factura):
         Paragraph(f"<b>N°:</b> {numero_fmt}", comp_line),
         Paragraph(f"<b>Fecha de emisión:</b> {_fmt_fecha(fecha)}", comp_line),
         Spacer(1, 3),
-        Paragraph(f"<b>CUIT:</b> {empresa.cuit if empresa else '-'}", comp_line),
+        Paragraph(f"<b>CUIT:</b> {_fmt_cuit(empresa.cuit) if empresa else '-'}", comp_line),
     ]
     if empresa and empresa.ingresos_brutos:
         col_comp.append(Paragraph(f"<b>Ingresos Brutos:</b> {empresa.ingresos_brutos}", comp_line))
