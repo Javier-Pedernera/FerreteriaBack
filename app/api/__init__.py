@@ -25,6 +25,7 @@ from .puntos_venta import puntos_venta_bp
 from .notas_api import notas_api
 from .presupuestos_api import presupuestos_api
 from .catalogos_api import catalogos_api
+from .anuncios_api import anuncios_api
 
 def register_blueprints(app):
     
@@ -51,5 +52,6 @@ def register_blueprints(app):
     app.register_blueprint(notas_api, url_prefix="/api/notas")
     app.register_blueprint(presupuestos_api, url_prefix="/api/presupuestos")
     app.register_blueprint(catalogos_api, url_prefix="/api")
+    app.register_blueprint(anuncios_api, url_prefix="/api/anuncios")
     # app.register_blueprint(auth_api, url_prefix='/api')
     # app.register_blueprint(status_api, url_prefix='/api')
