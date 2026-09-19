@@ -253,19 +253,21 @@ class ArcaService:
         # 🔎 Receptor: cliente registrado o datos sueltos / consumidor final
         cliente = factura.cliente
         if cliente:
-            if not cliente.tipo_documento:
-                raise ValueError("El cliente no tiene tipo de documento asignado")
             if not cliente.condicion_iva:
                 raise ValueError("El cliente no tiene condición IVA asignada")
-            doc_tipo = cliente.tipo_documento.codigo_afip
             cond_iva_receptor = cliente.condicion_iva.codigo_afip
 
-            if doc_tipo == 99:
-                doc_nro = 0
-            else:
-                if not cliente.cuit:
-                    raise ValueError("El cliente no tiene número de documento/cuit")
+            doc_tipo = cliente.tipo_documento.codigo_afip if cliente.tipo_documento else 99
+
+            # Si el cliente no tiene tipo de documento asignado, o lo tiene
+            # pero sin número, se factura como Consumidor Final sin
+            # identificar (válido para AFIP mientras el monto no supere el
+            # umbral que exige identificar al receptor).
+            if doc_tipo != 99 and cliente.cuit:
                 doc_nro = int(cliente.cuit)
+            else:
+                doc_tipo = 99
+                doc_nro = 0
         else:
             # sin cliente -> consumidor final por defecto
             doc_tipo = factura.receptor_doc_tipo or 99
