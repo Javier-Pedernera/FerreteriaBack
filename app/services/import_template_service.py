@@ -59,7 +59,6 @@ def import_products_from_excel(plantilla_id, cotizacion_dolar, fecha_lista):
     if not plantilla:
         return {"error": "No se encontró la plantilla con ese ID."}
 
-    plantilla.fecha_ultima_lista = fecha_lista_dt
     nombre_archivo = plantilla.nombre_archivo_excel
     ruta_excel = f'./app/static/uploads/excels/{nombre_archivo}'
     extension = nombre_archivo.split('.')[-1].lower()
@@ -256,6 +255,12 @@ def import_products_from_excel(plantilla_id, cotizacion_dolar, fecha_lista):
 
         except Exception as e:
             errores.append(f"Fila {index + plantilla.fila_inicio}: {str(e)}")
+
+    # La fecha de "última lista" solo se actualiza si la importación realmente
+    # cargó algún producto - si todo falló, no queremos que quede registrada
+    # como si se hubiese actualizado la lista.
+    if productos_importados > 0:
+        plantilla.fecha_ultima_lista = fecha_lista_dt
 
     try:
         db.session.commit()

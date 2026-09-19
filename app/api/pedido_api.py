@@ -8,8 +8,11 @@ def listar_pedidos():
     page = request.args.get("page", default=1, type=int)
     limit = request.args.get("limit", default=15, type=int)
     estado_code = request.args.get("estado", type=str)
+    proveedor_id = request.args.get("proveedor_id", type=int)
 
-    return PedidoService.get_pedidos_paginados(page=page, limit=limit, estado_code=estado_code), 200
+    return PedidoService.get_pedidos_paginados(
+        page=page, limit=limit, estado_code=estado_code, proveedor_id=proveedor_id
+    ), 200
 
 @pedido_bp.route("/pedidos-proveedores/<int:pedido_id>", methods=["GET"])
 def obtener_pedido(pedido_id):

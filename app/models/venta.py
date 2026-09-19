@@ -58,5 +58,6 @@ class Venta(db.Model):
             "recargo_tarjeta": str(self.recargo_tarjeta or 0),
             "persona_autorizada": self.persona_autorizada.serialize() if self.persona_autorizada else None,
             "cliente_id": self.cliente_id,
-            "factura_id": self.factura_id
+            "factura_id": self.factura_id,
+            "observaciones": self.observaciones
         }

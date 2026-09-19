@@ -9,13 +9,16 @@ from app.models.status import Status
 class PedidoService:
 
     @staticmethod
-    def get_pedidos_paginados(page=1, limit=15, estado_code=None):
+    def get_pedidos_paginados(page=1, limit=15, estado_code=None, proveedor_id=None):
         query = PedidoProveedor.query
 
         if estado_code:
             estado = Status.query.filter_by(code=estado_code).first()
             if estado:
                 query = query.filter_by(estado_id=estado.id)
+
+        if proveedor_id:
+            query = query.filter_by(proveedor_id=proveedor_id)
 
         pagination = query.order_by(PedidoProveedor.fecha_pedido.desc()) \
                         .paginate(page=page, per_page=limit, error_out=False)

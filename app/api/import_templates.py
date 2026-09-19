@@ -1,5 +1,5 @@
 import os
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, send_from_directory
 from app.models.planilla_importacion import PlantillaImportacion
 from app.services.import_template_service import create_import_template, delete_import_template, get_all_import_templates, get_import_template_by_id, update_import_template
 from werkzeug.utils import secure_filename
@@ -54,6 +54,21 @@ def delete_template(template_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 400
     
+@import_templates_bp.route('/import-templates/<int:template_id>/descargar', methods=['GET'])
+def descargar_excel(template_id):
+    plantilla = get_import_template_by_id(template_id)
+    if not plantilla:
+        return jsonify({'error': 'Plantilla no encontrada'}), 404
+
+    if not plantilla.nombre_archivo_excel:
+        return jsonify({'error': 'Esta plantilla no tiene un archivo configurado'}), 404
+
+    ruta_completa = os.path.join(UPLOAD_FOLDER, plantilla.nombre_archivo_excel)
+    if not os.path.exists(ruta_completa):
+        return jsonify({'error': 'Todavía no se subió ningún archivo para esta plantilla'}), 404
+
+    return send_from_directory(UPLOAD_FOLDER, plantilla.nombre_archivo_excel, as_attachment=True)
+
 @import_templates_bp.route('/import-templates/upload-excel', methods=['POST'])
 def upload_excel():
     try:
