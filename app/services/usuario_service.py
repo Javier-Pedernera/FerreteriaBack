@@ -14,6 +14,7 @@ def registrar_usuario_service(data):
         email=data['email'],
         telefono=data.get('telefono'),
         estado_id=data['estado_id'],
+        rol=data.get('rol', 'empleado'),
         creado_en=datetime.now(timezone.utc)
     )
     usuario.set_password(data['password'])

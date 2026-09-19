@@ -4,6 +4,7 @@ from app.models.usuario import Usuario
 from flask_jwt_extended import create_access_token
 from flask_jwt_extended import create_access_token
 from datetime import datetime
+from sqlalchemy.exc import IntegrityError
 from app.services.usuario_service import registrar_usuario_service, login_usuario_service
 from werkzeug.exceptions import HTTPException
 
@@ -27,7 +28,8 @@ def crear_usuario():
         apellido=data.get('apellido'),
         email=data.get('email'),
         telefono=data.get('telefono'),
-        estado_id=data['estado_id']
+        estado_id=data['estado_id'],
+        rol=data.get('rol', 'empleado')
     )
     db.session.add(usuario)
     db.session.commit()
@@ -62,6 +64,7 @@ def actualizar_usuario(usuario_id):
     usuario.email = data.get('email', usuario.email)
     usuario.telefono = data.get('telefono', usuario.telefono)
     usuario.estado_id = data.get('estado_id', usuario.estado_id)
+    usuario.rol = data.get('rol', usuario.rol)
 
     if 'password' in data:
         usuario.set_password(data['password'])
@@ -72,6 +75,13 @@ def actualizar_usuario(usuario_id):
 @usuarios_bp.route('/<int:usuario_id>', methods=['DELETE'])
 def eliminar_usuario(usuario_id):
     usuario = Usuario.query.get_or_404(usuario_id)
-    db.session.delete(usuario)
-    db.session.commit()
+    try:
+        db.session.delete(usuario)
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({
+            "error": "No se puede eliminar: el usuario tiene ventas u otros registros asociados. "
+                     "Podés desactivarlo en su lugar (cambiando su estado)."
+        }), 400
     return jsonify({"mensaje": "Usuario eliminado"}), 200
