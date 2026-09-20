@@ -56,18 +56,26 @@ def delete_template(template_id):
     
 @import_templates_bp.route('/import-templates/<int:template_id>/descargar', methods=['GET'])
 def descargar_excel(template_id):
-    plantilla = get_import_template_by_id(template_id)
+    # No usamos get_import_template_by_id (usa get_or_404, que lanza una
+    # excepcion que Flask renderiza con la misma pagina generica que una
+    # ruta inexistente) - queremos poder devolver nuestro propio JSON.
+    plantilla = PlantillaImportacion.query.get(template_id)
     if not plantilla:
         return jsonify({'error': 'Plantilla no encontrada'}), 404
 
     if not plantilla.nombre_archivo_excel:
         return jsonify({'error': 'Esta plantilla no tiene un archivo configurado'}), 404
 
-    ruta_completa = os.path.join(UPLOAD_FOLDER, plantilla.nombre_archivo_excel)
+    # Ruta absoluta: send_from_directory resuelve las rutas relativas contra
+    # app.root_path (la carpeta "app/"), no contra el directorio del proceso,
+    # así que una ruta relativa como "app/static/..." termina duplicando el
+    # "app/" y nunca encuentra el archivo.
+    carpeta_absoluta = os.path.abspath(UPLOAD_FOLDER)
+    ruta_completa = os.path.join(carpeta_absoluta, plantilla.nombre_archivo_excel)
     if not os.path.exists(ruta_completa):
         return jsonify({'error': 'Todavía no se subió ningún archivo para esta plantilla'}), 404
 
-    return send_from_directory(UPLOAD_FOLDER, plantilla.nombre_archivo_excel, as_attachment=True)
+    return send_from_directory(carpeta_absoluta, plantilla.nombre_archivo_excel, as_attachment=True)
 
 @import_templates_bp.route('/import-templates/upload-excel', methods=['POST'])
 def upload_excel():
