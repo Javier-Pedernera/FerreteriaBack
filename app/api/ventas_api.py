@@ -20,6 +20,7 @@ def listar():
     estado = request.args.get('estado')
     fecha = request.args.get('fecha')
     page = int(request.args.get('page', 1))
+    per_page = min(int(request.args.get('per_page', 10)), 500)
     cliente_id = request.args.get('cliente_id', type=int)
     facturada_raw = request.args.get('facturada')
     facturada = None
@@ -28,7 +29,7 @@ def listar():
 
     try:
         ventas_data = VentaService.obtener_filtradas(
-            estado, fecha, page, cliente_id=cliente_id, facturada=facturada
+            estado, fecha, page, per_page, cliente_id=cliente_id, facturada=facturada
         )
         return jsonify(ventas_data)
     except Exception as e:
