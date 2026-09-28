@@ -26,10 +26,13 @@ def listar():
     facturada = None
     if facturada_raw is not None:
         facturada = facturada_raw.lower() in ('true', '1')
+    sin_cliente_raw = request.args.get('sin_cliente')
+    sin_cliente = sin_cliente_raw is not None and sin_cliente_raw.lower() in ('true', '1')
 
     try:
         ventas_data = VentaService.obtener_filtradas(
-            estado, fecha, page, per_page, cliente_id=cliente_id, facturada=facturada
+            estado, fecha, page, per_page, cliente_id=cliente_id, facturada=facturada,
+            sin_cliente=sin_cliente
         )
         return jsonify(ventas_data)
     except Exception as e:
