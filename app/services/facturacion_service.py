@@ -1,7 +1,7 @@
 from datetime import date
 from decimal import Decimal
 from app import db
-from app.models import Venta, Factura
+from app.models import Venta, Factura, Cliente
 from app.models.factura_item import FacturaItem
 from app.models.punto_venta import PuntoVenta
 from app.models.tipo_comprobante import TipoComprobante
@@ -10,6 +10,36 @@ from app.models.status import Status
 from app.services.empresa_fiscal_service import EmpresaFiscalService
 
 class FacturacionService:
+
+    @staticmethod
+    def obtener_filtradas(page=1, per_page=10, estado=None, q=None):
+        """Listado paginado de facturas, con filtro opcional por estado y
+        por texto libre (nombre del cliente registrado o del receptor suelto
+        de mostrador)."""
+        query = Factura.query
+
+        if estado:
+            query = query.filter(Factura.estado == estado)
+
+        if q:
+            like = f"%{q}%"
+            query = query.outerjoin(Cliente, Factura.cliente_id == Cliente.id).filter(
+                db.or_(
+                    Cliente.nombre.ilike(like),
+                    Factura.receptor_nombre.ilike(like),
+                )
+            )
+
+        paginado = query.order_by(Factura.id.desc()).paginate(
+            page=page, per_page=per_page, error_out=False
+        )
+
+        return {
+            "data": [f.serialize() for f in paginado.items],
+            "total_pages": paginado.pages,
+            "current_page": paginado.page,
+            "total_items": paginado.total,
+        }
 
     @staticmethod
     def crear_factura_desde_ventas(cliente_id, ventas_ids, punto_venta_id, tipo_comprobante_id=None, receptor=None):

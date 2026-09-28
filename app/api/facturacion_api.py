@@ -70,8 +70,13 @@ def get_factura(id):
 # --------------------------------------------------
 @facturacion_api.route('/facturas', methods=['GET'])
 def get_all_facturas():
-    facturas = Factura.query.order_by(Factura.id.desc()).all()
-    return jsonify([f.serialize() for f in facturas]), 200
+    page = int(request.args.get('page', 1))
+    per_page = min(int(request.args.get('per_page', 10)), 100)
+    estado = request.args.get('estado')
+    q = request.args.get('q')
+
+    resultado = FacturacionService.obtener_filtradas(page=page, per_page=per_page, estado=estado, q=q)
+    return jsonify(resultado), 200
 
 
 @facturacion_api.route('/facturas/<int:id>', methods=['PUT'])
