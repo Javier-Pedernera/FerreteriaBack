@@ -39,12 +39,14 @@ class AnuncioService:
 
         intro = next((a for a in activos if a.posicion == 'intro'), None)
         outro = next((a for a in activos if a.posicion == 'outro'), None)
+        audio = next((a for a in activos if a.posicion == 'audio'), None)
         carrusel = [a for a in activos if a.posicion == 'carrusel']
 
         return {
             'intro': intro.serialize_publico() if intro else None,
             'carrusel': [a.serialize_publico() for a in carrusel],
             'outro': outro.serialize_publico() if outro else None,
+            'audio': audio.serialize_publico() if audio else None,
         }
 
     @staticmethod
@@ -74,8 +76,8 @@ class AnuncioService:
 
         activo = data.get('activo', True)
 
-        # Si va a quedar activo en intro/outro, el que estaba antes pasa a inactivo.
-        if activo and posicion in ('intro', 'outro'):
+        # Si va a quedar activo en intro/outro/audio, el que estaba antes pasa a inactivo.
+        if activo and posicion in ('intro', 'outro', 'audio'):
             AnuncioService._desactivar_otros_de_la_misma_posicion(posicion)
 
         anuncio = Anuncio(
@@ -120,7 +122,7 @@ class AnuncioService:
             anuncio.duracion_ms = data['duracion_ms'] if tipo == 'imagen' else None
 
         nuevo_activo = data.get('activo', anuncio.activo)
-        if nuevo_activo and posicion in ('intro', 'outro'):
+        if nuevo_activo and posicion in ('intro', 'outro', 'audio'):
             AnuncioService._desactivar_otros_de_la_misma_posicion(posicion, excluir_id=anuncio.id)
         anuncio.activo = nuevo_activo
 

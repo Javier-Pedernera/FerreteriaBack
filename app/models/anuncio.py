@@ -5,8 +5,9 @@ from app import db
 #   intro     -> logo/video de apertura (se espera un único activo)
 #   carrusel  -> piezas que rotan en el medio, en orden
 #   outro     -> logo/video de cierre (se espera un único activo)
-POSICIONES_ANUNCIO = ('intro', 'carrusel', 'outro')
-TIPOS_ANUNCIO = ('imagen', 'video')
+#   audio     -> pista de fondo opcional mientras se muestra el carrusel (un único activo)
+POSICIONES_ANUNCIO = ('intro', 'carrusel', 'outro', 'audio')
+TIPOS_ANUNCIO = ('imagen', 'video', 'audio')
 
 DURACION_IMAGEN_DEFAULT_MS = 8000
 
