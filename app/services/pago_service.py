@@ -115,6 +115,13 @@ class PagoService:
                 estado_pagada = StatusService.get_status_by_code("charged")
                 if estado_pagada:
                     venta.estado_id = estado_pagada.id
+                # La venta queda saldada con este pago: reflejar la forma de
+                # pago real usada para cancelarla (antes quedaba "pisada" con
+                # la que tenía al crearse, ej. "Cuenta Corriente", para
+                # siempre - afectando lo que se imprime despues en la
+                # factura).
+                if forma_pago_id:
+                    venta.forma_pago_id = forma_pago_id
 
             venta.actualizar_saldo()
 
