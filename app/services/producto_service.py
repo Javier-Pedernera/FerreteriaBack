@@ -47,7 +47,8 @@ class ProductoService:
             marca_id=data.get('marca_id'),
             ubicacion_local=data.get('ubicacion_local'),
             presentacion_cantidad=data.get('presentacion_cantidad', 1.0),
-            es_fraccionable=data.get('es_fraccionable', False)
+            es_fraccionable=data.get('es_fraccionable', False),
+            es_frecuente=data.get('es_frecuente', False)
         )
 
         # Calcular precio final con los datos ya cargados
@@ -82,7 +83,7 @@ class ProductoService:
                                 'precio_ars', 'precio_usd', 'precio_sugerido', 'porcentaje_ganancia', 'disponibles',
                                 'proveedor_id', 'categoria_id', 'status_id', 'unidad_medida_id',
                                 'marca_id', 'ubicacion_local', 'porcentaje_ganancia_personalizado', 'presentacion_cantidad',
-                                'es_fraccionable']
+                                'es_fraccionable', 'es_frecuente']
 
         for campo in campos_actualizables:
             if campo in data:
@@ -113,7 +114,7 @@ class ProductoService:
         return True
     
     @staticmethod
-    def buscar_con_filtros(page=1, limit=20, query=None, categoria_id=None, proveedor_id=None, marca_id=None, status_id=None):
+    def buscar_con_filtros(page=1, limit=20, query=None, categoria_id=None, proveedor_id=None, marca_id=None, status_id=None, es_frecuente=None):
         q = Producto.query
 
         if query:
@@ -149,6 +150,8 @@ class ProductoService:
             q = q.filter_by(marca_id=marca_id)
         if status_id:
             q = q.filter_by(status_id=status_id)
+        if es_frecuente:
+            q = q.filter_by(es_frecuente=True)
 
         total = q.count()
         productos = q.offset((page - 1) * limit).limit(limit).all()

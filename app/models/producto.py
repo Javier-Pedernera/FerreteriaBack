@@ -43,6 +43,7 @@ class Producto(db.Model):
     detalles = db.relationship('DetallePedidoProveedor', back_populates='producto', lazy=True)
     presentacion_cantidad = db.Column(db.Float, nullable=True, default=1.0)
     es_fraccionable = db.Column(db.Boolean, default=False)
+    es_frecuente = db.Column(db.Boolean, default=False)
     
     def calcular_precio_final(self):
         try:
@@ -106,6 +107,7 @@ class Producto(db.Model):
             'imagenes': [img.serialize() for img in self.imagenes],
             'presentacion_cantidad': self.presentacion_cantidad,
             'es_fraccionable': self.es_fraccionable,
+            'es_frecuente': self.es_frecuente,
             'precio_por_unidad': str(self.precio_por_unidad()) if self.precio_por_unidad() else None,
         }
 

@@ -13,6 +13,7 @@ def get_productos():
     proveedor_id = request.args.get('proveedor_id')
     marca_id = request.args.get('marca_id')
     status_id = request.args.get('status_id')
+    es_frecuente = request.args.get('es_frecuente', '').lower() in ('1', 'true')
 
     productos, total = ProductoService.buscar_con_filtros(
         page=page,
@@ -21,7 +22,8 @@ def get_productos():
         categoria_id=categoria_id,
         proveedor_id=proveedor_id,
         marca_id=marca_id,
-        status_id=status_id
+        status_id=status_id,
+        es_frecuente=es_frecuente
     )
 
     return jsonify({
