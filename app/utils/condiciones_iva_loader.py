@@ -14,6 +14,7 @@ def initialize_condiciones_iva():
         {"codigo": "EX", "descripcion": "Exento", "codigo_afip": 4},
         {"codigo": "CF", "descripcion": "Consumidor Final", "codigo_afip": 5},
         {"codigo": "NI", "descripcion": "No Inscripto", "codigo_afip": 7},
+        {"codigo": "NA", "descripcion": "IVA No Alcanzado", "codigo_afip": 15},
     ]
 
     for c in condiciones:
