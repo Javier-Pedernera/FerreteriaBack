@@ -97,7 +97,7 @@ def main(aplicar: bool):
 
         if aplicar:
             db.session.commit()
-            print("\n✅ Cambios guardados.")
+            print("\nCambios guardados.")
         else:
             print("\nEsto fue un dry-run, no se guardó nada. Volvé a correr con --aplicar para aplicar los cambios.")
 

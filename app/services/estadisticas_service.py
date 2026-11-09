@@ -13,17 +13,29 @@ from app.models.detalle_pedido_proveedor import DetallePedidoProveedor
 class EstadisticasService:
 
     # --------------------------------------------------
+    # Total realmente ingresado por una venta: el bruto
+    # (suma de detalles) neto del descuento aplicado.
+    # El recargo de tarjeta no se suma aquí porque compensa
+    # un costo (comisión de la tarjeta), no es ganancia.
+    # --------------------------------------------------
+    @staticmethod
+    def _total_neto_expr():
+        descuento_frac = (1 - func.coalesce(Venta.descuento, 0) / 100)
+        return Venta.total * descuento_frac
+
+    # --------------------------------------------------
     # VENTAS POR PERÍODO (SOLO COBRADAS)
     # --------------------------------------------------
     @staticmethod
     def ventas_por_periodo(periodo='diario'):
 
         deleted_status_id = db.session.query(Status.id).filter(Status.code == 'deleted').scalar()
+        total_neto = EstadisticasService._total_neto_expr()
 
         if periodo == 'diario':
             q = db.session.query(
                 func.date(Venta.fecha_venta).label('fecha'),
-                func.sum(Venta.total).label('totalVentas'),
+                func.sum(total_neto).label('totalVentas'),
                 func.count(Venta.id).label('cantidadVentas')
             ).filter(
                 Venta.fecha_pago.isnot(None),
@@ -41,7 +53,7 @@ class EstadisticasService:
                     '-',
                     func.lpad(func.extract('month', Venta.fecha_venta).cast(db.String), 2, '0')
                 ).label('fecha'),
-                func.sum(Venta.total).label('totalVentas'),
+                func.sum(total_neto).label('totalVentas'),
                 func.count(Venta.id).label('cantidadVentas')
             ).filter(
                 Venta.fecha_pago.isnot(None),
@@ -51,7 +63,7 @@ class EstadisticasService:
         elif periodo == 'anual':
             q = db.session.query(
                 func.extract('year', Venta.fecha_venta).cast(db.String).label('fecha'),
-                func.sum(Venta.total).label('totalVentas'),
+                func.sum(total_neto).label('totalVentas'),
                 func.count(Venta.id).label('cantidadVentas')
             ).filter(
                 Venta.fecha_pago.isnot(None),
@@ -77,10 +89,11 @@ class EstadisticasService:
     def top_clientes(limite=10):
 
         deleted_status_id = db.session.query(Status.id).filter(Status.code == 'deleted').scalar()
+        total_neto = EstadisticasService._total_neto_expr()
 
         q = db.session.query(
             Cliente.nombre.label('cliente'),
-            func.sum(Venta.total).label('totalCompras')
+            func.sum(total_neto).label('totalCompras')
         ).join(
             Venta, Venta.cliente_id == Cliente.id
         ).filter(
@@ -89,7 +102,7 @@ class EstadisticasService:
         ).group_by(
             Cliente.id
         ).order_by(
-            func.sum(Venta.total).desc()
+            func.sum(total_neto).desc()
         ).limit(limite)
 
         return [
@@ -107,11 +120,12 @@ class EstadisticasService:
     def ventas_cliente(cliente_id, periodo='diario'):
 
         deleted_status_id = db.session.query(Status.id).filter(Status.code == 'deleted').scalar()
+        total_neto = EstadisticasService._total_neto_expr()
 
         if periodo == 'diario':
             q = db.session.query(
                 func.date(Venta.fecha_pago).label('fecha'),
-                func.sum(Venta.total).label('totalVentas'),
+                func.sum(total_neto).label('totalVentas'),
                 func.count(Venta.id).label('cantidadVentas')
             ).filter(
                 Venta.cliente_id == cliente_id,
@@ -130,7 +144,7 @@ class EstadisticasService:
                     '-',
                     func.lpad(func.extract('month', Venta.fecha_pago).cast(db.String), 2, '0')
                 ).label('fecha'),
-                func.sum(Venta.total).label('totalVentas'),
+                func.sum(total_neto).label('totalVentas'),
                 func.count(Venta.id).label('cantidadVentas')
             ).filter(
                 Venta.cliente_id == cliente_id,
@@ -141,7 +155,7 @@ class EstadisticasService:
         elif periodo == 'anual':
             q = db.session.query(
                 func.extract('year', Venta.fecha_pago).cast(db.String).label('fecha'),
-                func.sum(Venta.total).label('totalVentas'),
+                func.sum(total_neto).label('totalVentas'),
                 func.count(Venta.id).label('cantidadVentas')
             ).filter(
                 Venta.cliente_id == cliente_id,
@@ -167,10 +181,11 @@ class EstadisticasService:
         hoy = date.today()
         mes = hoy.month
         anio = hoy.year
+        total_neto = EstadisticasService._total_neto_expr()
 
         # Ventas hoy
         total_hoy, cant_hoy = db.session.query(
-            func.coalesce(func.sum(Venta.total), 0),
+            func.coalesce(func.sum(total_neto), 0),
             func.count(Venta.id)
         ).join(
             Status, Status.id == Venta.estado_id
@@ -182,7 +197,7 @@ class EstadisticasService:
 
         # Ventas mes
         total_mes, cant_mes = db.session.query(
-            func.coalesce(func.sum(Venta.total), 0),
+            func.coalesce(func.sum(total_neto), 0),
             func.count(Venta.id)
         ).join(
             Status, Status.id == Venta.estado_id
@@ -194,10 +209,11 @@ class EstadisticasService:
         ).first()
 
         # Top productos
+        descuento_frac_linea = (1 - func.coalesce(Venta.descuento, 0) / 100)
         top_productos = db.session.query(
             Producto.nombre,
             func.sum(DetalleVenta.cantidad),
-            func.sum(DetalleVenta.cantidad * DetalleVenta.precio_unitario)
+            func.sum(DetalleVenta.cantidad * DetalleVenta.precio_unitario * descuento_frac_linea)
         ).join(
             Producto, Producto.id == DetalleVenta.producto_id
         ).join(
@@ -219,7 +235,7 @@ class EstadisticasService:
         inicio = hoy - timedelta(days=15)
         ventas_por_dia = db.session.query(
             func.date(Venta.fecha_venta),
-            func.sum(Venta.total),
+            func.sum(total_neto),
             func.count(Venta.id)
         ).join(
             Status, Status.id == Venta.estado_id
@@ -261,10 +277,11 @@ class EstadisticasService:
 
         inicio = datetime.combine(fecha, datetime.min.time())
         fin = inicio + timedelta(days=1)
+        total_neto = EstadisticasService._total_neto_expr()
 
         # 🔹 INGRESOS
         ingresos = db.session.query(
-            func.coalesce(func.sum(Venta.total), 0),
+            func.coalesce(func.sum(total_neto), 0),
             func.count(Venta.id)
         ).join(
             Status, Status.id == Venta.estado_id
@@ -347,16 +364,22 @@ class EstadisticasService:
     # --------------------------------------------------
     @staticmethod
     def ganancia_mensual():
+        # El descuento se aplica a nivel de venta (no por línea), así que para
+        # repartirlo entre los productos vendidos cada línea se multiplica por
+        # el mismo factor (1 - descuento/100) de su venta. El costo del
+        # producto no se ve afectado por el descuento: el margen se reduce
+        # exactamente por el monto descontado.
+        descuento_frac = (1 - func.coalesce(Venta.descuento, 0) / 100)
         resultados = (
             db.session.query(
                 func.extract('year', Venta.fecha_venta).label('anio'),
                 func.extract('month', Venta.fecha_venta).label('mes'),
                 func.sum(
-                    DetalleVenta.cantidad * DetalleVenta.precio_unitario
+                    DetalleVenta.cantidad * DetalleVenta.precio_unitario * descuento_frac
                 ).label('total_ventas'),
                 func.sum(
-                    DetalleVenta.cantidad *
-                    (DetalleVenta.precio_unitario - DetalleVenta.precio_costo)
+                    DetalleVenta.cantidad * DetalleVenta.precio_unitario * descuento_frac
+                    - DetalleVenta.cantidad * DetalleVenta.precio_costo
                 ).label('ganancia_neta'),
                 # ✅ NUEVO
                 func.avg(
