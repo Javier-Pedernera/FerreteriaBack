@@ -8,6 +8,8 @@ from app.models.detalle_venta import DetalleVenta
 from app.models.producto import Producto
 from app.models.pedido_proveedor import PedidoProveedor
 from app.models.detalle_pedido_proveedor import DetallePedidoProveedor
+from app.models.forma_pago import FormaPago
+from app.models.categoria import Categoria
 
 
 class EstadisticasService:
@@ -17,11 +19,37 @@ class EstadisticasService:
     # (suma de detalles) neto del descuento aplicado.
     # El recargo de tarjeta no se suma aquí porque compensa
     # un costo (comisión de la tarjeta), no es ganancia.
+    # El descuento se acota a [0, 100] para que una fila con
+    # datos corruptos (ej. descuento guardado como monto, no
+    # como %) no distorsione el resto de las estadísticas.
     # --------------------------------------------------
     @staticmethod
+    def _descuento_frac_expr():
+        descuento_acotado = func.least(func.greatest(func.coalesce(Venta.descuento, 0), 0), 100)
+        return 1 - descuento_acotado / 100
+
+    @staticmethod
     def _total_neto_expr():
-        descuento_frac = (1 - func.coalesce(Venta.descuento, 0) / 100)
-        return Venta.total * descuento_frac
+        return Venta.total * EstadisticasService._descuento_frac_expr()
+
+    # --------------------------------------------------
+    # Aplica un filtro opcional de mes (formato "YYYY-MM") a
+    # una query que ya tiene a Venta en su FROM/JOIN. Si mes
+    # es None o vacío, no filtra (se mantiene el total general).
+    # --------------------------------------------------
+    @staticmethod
+    def _filtrar_por_mes(query, mes):
+        if not mes:
+            return query
+        try:
+            anio_str, mes_str = mes.split('-')
+            anio, mes_num = int(anio_str), int(mes_str)
+        except (ValueError, AttributeError):
+            return query
+        return query.filter(
+            func.extract('year', Venta.fecha_venta) == anio,
+            func.extract('month', Venta.fecha_venta) == mes_num
+        )
 
     # --------------------------------------------------
     # VENTAS POR PERÍODO (SOLO COBRADAS)
@@ -112,6 +140,47 @@ class EstadisticasService:
             }
             for r in q.all()
         ]
+
+    # --------------------------------------------------
+    # VENTAS POR FORMA DE PAGO (SOLO COBRADAS)
+    # --------------------------------------------------
+    @staticmethod
+    def ventas_por_forma_pago(mes=None):
+
+        deleted_status_id = db.session.query(Status.id).filter(Status.code == 'deleted').scalar()
+        total_neto = EstadisticasService._total_neto_expr()
+
+        q = db.session.query(
+            FormaPago.nombre.label('formaPago'),
+            func.sum(total_neto).label('total'),
+            func.count(Venta.id).label('cantidad')
+        ).join(
+            Venta, Venta.forma_pago_id == FormaPago.id
+        ).filter(
+            Venta.fecha_pago.isnot(None),
+            Venta.estado_id != deleted_status_id
+        )
+        q = EstadisticasService._filtrar_por_mes(q, mes)
+        q = q.group_by(
+            FormaPago.id
+        ).order_by(
+            func.sum(total_neto).desc()
+        )
+
+        resultados = [
+            {
+                'formaPago': r.formaPago,
+                'total': float(r.total),
+                'cantidad': r.cantidad
+            }
+            for r in q.all()
+        ]
+
+        total_general = sum(r['total'] for r in resultados)
+        for r in resultados:
+            r['porcentaje'] = round((r['total'] / total_general) * 100, 2) if total_general > 0 else 0
+
+        return resultados
 
     # --------------------------------------------------
     # VENTAS POR CLIENTE
@@ -209,7 +278,7 @@ class EstadisticasService:
         ).first()
 
         # Top productos
-        descuento_frac_linea = (1 - func.coalesce(Venta.descuento, 0) / 100)
+        descuento_frac_linea = EstadisticasService._descuento_frac_expr()
         top_productos = db.session.query(
             Producto.nombre,
             func.sum(DetalleVenta.cantidad),
@@ -369,7 +438,7 @@ class EstadisticasService:
         # el mismo factor (1 - descuento/100) de su venta. El costo del
         # producto no se ve afectado por el descuento: el margen se reduce
         # exactamente por el monto descontado.
-        descuento_frac = (1 - func.coalesce(Venta.descuento, 0) / 100)
+        descuento_frac = EstadisticasService._descuento_frac_expr()
         resultados = (
             db.session.query(
                 func.extract('year', Venta.fecha_venta).label('anio'),
@@ -414,4 +483,242 @@ class EstadisticasService:
                 ),
             }
             for r in resultados
+        ]
+
+    # --------------------------------------------------
+    # PRODUCTOS MÁS VENDIDOS (SOLO COBRADAS)
+    # --------------------------------------------------
+    @staticmethod
+    def productos_mas_vendidos(limite=10, mes=None):
+        descuento_frac = EstadisticasService._descuento_frac_expr()
+
+        q = (
+            db.session.query(
+                Producto.nombre.label('producto'),
+                func.sum(DetalleVenta.cantidad).label('cantidad'),
+                func.sum(
+                    DetalleVenta.cantidad * DetalleVenta.precio_unitario * descuento_frac
+                ).label('total')
+            )
+            .join(Producto, Producto.id == DetalleVenta.producto_id)
+            .join(Venta, Venta.id == DetalleVenta.venta_id)
+            .join(Status, Status.id == Venta.estado_id)
+            .filter(
+                Venta.fecha_pago.isnot(None),
+                Status.code != 'deleted'
+            )
+        )
+        q = EstadisticasService._filtrar_por_mes(q, mes)
+        q = (
+            q
+            .group_by(Producto.id)
+            .order_by(func.sum(DetalleVenta.cantidad * DetalleVenta.precio_unitario * descuento_frac).desc())
+            .limit(limite)
+        )
+
+        return [
+            {
+                'producto': r.producto,
+                'cantidad': float(r.cantidad),
+                'total': float(r.total)
+            }
+            for r in q.all()
+        ]
+
+    # --------------------------------------------------
+    # STOCK LENTO: productos con stock disponible que no
+    # se vendieron (o casi no se vendieron) en los últimos
+    # `dias` días.
+    # --------------------------------------------------
+    @staticmethod
+    def stock_lento(dias=60, limite=15):
+        desde = datetime.now() - timedelta(days=dias)
+        deleted_status_id = db.session.query(Status.id).filter(Status.code == 'deleted').scalar()
+
+        vendidos_recientes = (
+            db.session.query(
+                DetalleVenta.producto_id,
+                func.sum(DetalleVenta.cantidad).label('cantidad_reciente')
+            )
+            .join(Venta, Venta.id == DetalleVenta.venta_id)
+            .filter(
+                Venta.fecha_pago.isnot(None),
+                Venta.estado_id != deleted_status_id,
+                Venta.fecha_venta >= desde
+            )
+            .group_by(DetalleVenta.producto_id)
+            .subquery()
+        )
+
+        q = (
+            db.session.query(
+                Producto.nombre,
+                Producto.disponibles,
+                Categoria.nombre,
+                func.coalesce(vendidos_recientes.c.cantidad_reciente, 0)
+            )
+            .outerjoin(vendidos_recientes, vendidos_recientes.c.producto_id == Producto.id)
+            .outerjoin(Categoria, Categoria.id == Producto.categoria_id)
+            .filter(
+                Producto.disponibles > 0,
+                func.coalesce(vendidos_recientes.c.cantidad_reciente, 0) == 0
+            )
+            .order_by(Producto.disponibles.desc())
+            .limit(limite)
+        )
+
+        return [
+            {
+                'producto': r[0],
+                'disponibles': r[1],
+                'categoria': r[2],
+            }
+            for r in q.all()
+        ]
+
+    # --------------------------------------------------
+    # MARGEN POR CATEGORÍA (SOLO COBRADAS)
+    # --------------------------------------------------
+    @staticmethod
+    def margen_por_categoria(mes=None):
+        descuento_frac = EstadisticasService._descuento_frac_expr()
+
+        q = (
+            db.session.query(
+                func.coalesce(Categoria.nombre, 'Sin categoría').label('categoria'),
+                func.sum(
+                    DetalleVenta.cantidad * DetalleVenta.precio_unitario * descuento_frac
+                ).label('total_ventas'),
+                func.sum(
+                    DetalleVenta.cantidad * DetalleVenta.precio_unitario * descuento_frac
+                    - DetalleVenta.cantidad * DetalleVenta.precio_costo
+                ).label('ganancia_neta')
+            )
+            .join(Producto, Producto.id == DetalleVenta.producto_id)
+            .outerjoin(Categoria, Categoria.id == Producto.categoria_id)
+            .join(Venta, Venta.id == DetalleVenta.venta_id)
+            .join(Status, Status.id == Venta.estado_id)
+            .filter(
+                Venta.fecha_pago.isnot(None),
+                Status.code != 'deleted'
+            )
+        )
+        q = EstadisticasService._filtrar_por_mes(q, mes)
+        q = (
+            q
+            .group_by(func.coalesce(Categoria.nombre, 'Sin categoría'))
+            .order_by(func.sum(DetalleVenta.cantidad * DetalleVenta.precio_unitario * descuento_frac).desc())
+        )
+
+        return [
+            {
+                'categoria': r.categoria,
+                'totalVentas': float(r.total_ventas),
+                'gananciaNeta': float(r.ganancia_neta),
+                'margen': (
+                    round((float(r.ganancia_neta) / float(r.total_ventas)) * 100, 2)
+                    if r.total_ventas and float(r.total_ventas) > 0
+                    else 0
+                )
+            }
+            for r in q.all()
+        ]
+
+    # --------------------------------------------------
+    # CLIENTES FRECUENTES (por cantidad de compras) + ticket
+    # promedio de cada uno (SOLO COBRADAS)
+    # --------------------------------------------------
+    @staticmethod
+    def clientes_frecuentes(limite=10, mes=None):
+        deleted_status_id = db.session.query(Status.id).filter(Status.code == 'deleted').scalar()
+        total_neto = EstadisticasService._total_neto_expr()
+
+        q = (
+            db.session.query(
+                Cliente.nombre.label('cliente'),
+                func.count(Venta.id).label('cantidadCompras'),
+                func.sum(total_neto).label('total')
+            )
+            .join(Venta, Venta.cliente_id == Cliente.id)
+            .filter(
+                Venta.fecha_pago.isnot(None),
+                Venta.estado_id != deleted_status_id
+            )
+        )
+        q = EstadisticasService._filtrar_por_mes(q, mes)
+        q = (
+            q
+            .group_by(Cliente.id)
+            .order_by(func.count(Venta.id).desc())
+            .limit(limite)
+        )
+
+        return [
+            {
+                'cliente': r.cliente,
+                'cantidadCompras': r.cantidadCompras,
+                'total': float(r.total),
+                'ticketPromedio': round(float(r.total) / r.cantidadCompras, 2) if r.cantidadCompras else 0
+            }
+            for r in q.all()
+        ]
+
+    # --------------------------------------------------
+    # TICKET PROMEDIO GENERAL (todas las ventas cobradas)
+    # --------------------------------------------------
+    @staticmethod
+    def ticket_promedio_general(mes=None):
+        deleted_status_id = db.session.query(Status.id).filter(Status.code == 'deleted').scalar()
+        total_neto = EstadisticasService._total_neto_expr()
+
+        q = db.session.query(
+            func.coalesce(func.sum(total_neto), 0),
+            func.count(Venta.id)
+        ).filter(
+            Venta.fecha_pago.isnot(None),
+            Venta.estado_id != deleted_status_id
+        )
+        q = EstadisticasService._filtrar_por_mes(q, mes)
+        total, cantidad = q.first()
+
+        return {
+            'ticketPromedio': round(float(total) / cantidad, 2) if cantidad else 0,
+            'cantidadVentas': cantidad
+        }
+
+    # --------------------------------------------------
+    # CLIENTES INACTIVOS: tenían compras pero no volvieron
+    # a comprar en los últimos `dias` días.
+    # --------------------------------------------------
+    @staticmethod
+    def clientes_inactivos(dias=60, limite=15):
+        deleted_status_id = db.session.query(Status.id).filter(Status.code == 'deleted').scalar()
+        total_neto = EstadisticasService._total_neto_expr()
+        corte = datetime.now() - timedelta(days=dias)
+
+        q = (
+            db.session.query(
+                Cliente.nombre.label('cliente'),
+                func.max(Venta.fecha_venta).label('ultimaCompra'),
+                func.sum(total_neto).label('totalHistorico')
+            )
+            .join(Venta, Venta.cliente_id == Cliente.id)
+            .filter(
+                Venta.fecha_pago.isnot(None),
+                Venta.estado_id != deleted_status_id
+            )
+            .group_by(Cliente.id)
+            .having(func.max(Venta.fecha_venta) < corte)
+            .order_by(func.sum(total_neto).desc())
+            .limit(limite)
+        )
+
+        return [
+            {
+                'cliente': r.cliente,
+                'ultimaCompra': r.ultimaCompra.date().isoformat(),
+                'diasInactivo': (datetime.now() - r.ultimaCompra).days,
+                'totalHistorico': float(r.totalHistorico)
+            }
+            for r in q.all()
         ]

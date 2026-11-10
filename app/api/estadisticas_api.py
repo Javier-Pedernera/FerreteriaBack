@@ -49,3 +49,56 @@ def resumen_ingresos_egresos():
 def listar_ganancia_mensual():
     data = EstadisticasService.ganancia_mensual()
     return jsonify(data), 200
+
+# GET /estadisticas/formas-pago?mes=YYYY-MM
+@estadisticas_bp.route('/formas-pago', methods=['GET'])
+def listar_ventas_por_forma_pago():
+    mes = request.args.get('mes')
+    data = EstadisticasService.ventas_por_forma_pago(mes)
+    return jsonify(data), 200
+
+# GET /estadisticas/productos-top?limite=10&mes=YYYY-MM
+@estadisticas_bp.route('/productos-top', methods=['GET'])
+def listar_productos_mas_vendidos():
+    limite = int(request.args.get('limite', 10))
+    mes = request.args.get('mes')
+    data = EstadisticasService.productos_mas_vendidos(limite, mes)
+    return jsonify(data), 200
+
+# GET /estadisticas/stock-lento?dias=60&limite=15
+@estadisticas_bp.route('/stock-lento', methods=['GET'])
+def listar_stock_lento():
+    dias = int(request.args.get('dias', 60))
+    limite = int(request.args.get('limite', 15))
+    data = EstadisticasService.stock_lento(dias, limite)
+    return jsonify(data), 200
+
+# GET /estadisticas/margen-categoria?mes=YYYY-MM
+@estadisticas_bp.route('/margen-categoria', methods=['GET'])
+def listar_margen_por_categoria():
+    mes = request.args.get('mes')
+    data = EstadisticasService.margen_por_categoria(mes)
+    return jsonify(data), 200
+
+# GET /estadisticas/clientes-frecuentes?limite=10&mes=YYYY-MM
+@estadisticas_bp.route('/clientes-frecuentes', methods=['GET'])
+def listar_clientes_frecuentes():
+    limite = int(request.args.get('limite', 10))
+    mes = request.args.get('mes')
+    data = EstadisticasService.clientes_frecuentes(limite, mes)
+    return jsonify(data), 200
+
+# GET /estadisticas/ticket-promedio?mes=YYYY-MM
+@estadisticas_bp.route('/ticket-promedio', methods=['GET'])
+def obtener_ticket_promedio():
+    mes = request.args.get('mes')
+    data = EstadisticasService.ticket_promedio_general(mes)
+    return jsonify(data), 200
+
+# GET /estadisticas/clientes-inactivos?dias=60&limite=15
+@estadisticas_bp.route('/clientes-inactivos', methods=['GET'])
+def listar_clientes_inactivos():
+    dias = int(request.args.get('dias', 60))
+    limite = int(request.args.get('limite', 15))
+    data = EstadisticasService.clientes_inactivos(dias, limite)
+    return jsonify(data), 200
