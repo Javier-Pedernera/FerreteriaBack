@@ -44,7 +44,8 @@ class Producto(db.Model):
     presentacion_cantidad = db.Column(db.Float, nullable=True, default=1.0)
     es_fraccionable = db.Column(db.Boolean, default=False)
     es_frecuente = db.Column(db.Boolean, default=False)
-    
+    porcentaje_ganancia_fraccionado = db.Column(db.Float, nullable=True)
+
     def calcular_precio_final(self):
         try:
             porcentaje = self.porcentaje_ganancia if self.porcentaje_ganancia_personalizado else self.proveedor.porcentaje_ganancia
@@ -59,13 +60,20 @@ class Producto(db.Model):
             if not self.presentacion_cantidad or self.presentacion_cantidad <= 0:
                 return float(self.precio_final) if self.precio_final else None
 
-            valor_real = float(self.precio_final) / self.presentacion_cantidad
-
             if not self.es_fraccionable:
                 # No es fraccionable → se vende entero, devuelvo precio final
                 return float(self.precio_final)
 
-            # Si es fraccionable, decido según la unidad de medida
+            # Si tiene un % de ganancia propio para la venta fraccionada, se
+            # calcula desde el costo (no desde precio_final) para no heredar
+            # el % de la pieza entera.
+            if self.porcentaje_ganancia_fraccionado is not None:
+                costo_unitario = float(self.precio_ars) / self.presentacion_cantidad
+                valor_real = costo_unitario * (1 + float(self.porcentaje_ganancia_fraccionado) / 100)
+            else:
+                valor_real = float(self.precio_final) / self.presentacion_cantidad
+
+            # Según la unidad de medida, redondeo distinto
             if self.unidad_medida and self.unidad_medida.codigo in ["cm", "gr", "ml"]:
                 # Valores chicos → mantener 2 decimales
                 return round(valor_real, 2)
@@ -108,6 +116,7 @@ class Producto(db.Model):
             'presentacion_cantidad': self.presentacion_cantidad,
             'es_fraccionable': self.es_fraccionable,
             'es_frecuente': self.es_frecuente,
+            'porcentaje_ganancia_fraccionado': self.porcentaje_ganancia_fraccionado,
             'precio_por_unidad': str(self.precio_por_unidad()) if self.precio_por_unidad() else None,
         }
 
