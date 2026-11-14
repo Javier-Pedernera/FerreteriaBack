@@ -123,6 +123,12 @@ def import_products_from_excel(plantilla_id, cotizacion_dolar, fecha_lista):
 
             precio_usd = round(precio_ars / cotizacion_dolar, 2)
 
+            # Un precio 0 en la lista normalmente significa que el producto
+            # no está disponible, se dejó de fabricar, o es un error de la
+            # lista del proveedor. En cualquier caso, no queremos pisar el
+            # último precio real conocido con un 0.
+            precio_valido = precio_ars > 0
+
             nombre = None
             if plantilla.nombre_columna_nombre in df.columns:
                 val = row.get(plantilla.nombre_columna_nombre)
@@ -206,8 +212,15 @@ def import_products_from_excel(plantilla_id, cotizacion_dolar, fecha_lista):
             ).first()
 
             if producto_existente:
-                producto_existente.precio_ars = precio_ars
-                producto_existente.precio_usd = precio_usd
+                if precio_valido:
+                    producto_existente.precio_ars = precio_ars
+                    producto_existente.precio_usd = precio_usd
+                else:
+                    errores.append(
+                        f"Fila {index + plantilla.fila_inicio}: precio 0 para "
+                        f"'{producto_existente.nombre}' ({producto_existente.cod_interno}), "
+                        f"se mantiene el último precio real (${producto_existente.precio_ars})."
+                    )
 
                 if nombre:
                     producto_existente.nombre = nombre
@@ -233,8 +246,9 @@ def import_products_from_excel(plantilla_id, cotizacion_dolar, fecha_lista):
 
                 db.session.flush()
                 producto_existente.precio_final = producto_existente.calcular_precio_final()
+                productos_importados += 1
 
-            else:
+            elif precio_valido:
                 producto = Producto(
                     cod_interno=f"{codigo_proveedor}-{codigo_str}",
                     cod_proveedor=codigo_proveedor,
@@ -250,8 +264,15 @@ def import_products_from_excel(plantilla_id, cotizacion_dolar, fecha_lista):
                 db.session.add(producto)
                 db.session.flush()
                 producto.precio_final = producto.calcular_precio_final()
+                productos_importados += 1
 
-            productos_importados += 1
+            else:
+                # Producto nuevo (no existe aún) con precio 0: no hay un
+                # precio real previo para mantener, así que no se crea.
+                errores.append(
+                    f"Fila {index + plantilla.fila_inicio}: producto nuevo "
+                    f"'{codigo_proveedor}-{codigo_str}' con precio 0, no se creó."
+                )
 
         except Exception as e:
             errores.append(f"Fila {index + plantilla.fila_inicio}: {str(e)}")
