@@ -7,6 +7,7 @@ class Producto(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     cod_interno = db.Column(db.String(50), unique=True, nullable=False)
+    codigo_barras = db.Column(db.String(50), unique=True, nullable=True)
     cod_proveedor = db.Column(db.String(50))
     nombre = db.Column(db.String(200), nullable=False)
     nombre_corto = db.Column(db.String, nullable=True)
@@ -88,6 +89,7 @@ class Producto(db.Model):
         return {
             'id': self.id,
             'cod_interno': self.cod_interno,
+            'codigo_barras': self.codigo_barras,
             'cod_proveedor': self.cod_proveedor,
             'nombre': self.nombre,
             'nombre_corto': self.nombre_corto,

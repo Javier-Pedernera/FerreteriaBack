@@ -31,6 +31,7 @@ class ProductoService:
 
         producto = Producto(
             cod_interno=nuevo_cod_interno,
+            codigo_barras=data.get('codigo_barras') or None,
             cod_proveedor=codigo_proveedor,
             nombre=data.get('nombre'),
             nombre_corto=data.get('nombre_corto'),
@@ -84,11 +85,14 @@ class ProductoService:
                                 'precio_ars', 'precio_usd', 'precio_sugerido', 'porcentaje_ganancia', 'disponibles',
                                 'proveedor_id', 'categoria_id', 'status_id', 'unidad_medida_id',
                                 'marca_id', 'ubicacion_local', 'porcentaje_ganancia_personalizado', 'presentacion_cantidad',
-                                'es_fraccionable', 'es_frecuente', 'porcentaje_ganancia_fraccionado']
+                                'es_fraccionable', 'es_frecuente', 'porcentaje_ganancia_fraccionado', 'codigo_barras']
 
         for campo in campos_actualizables:
             if campo in data:
-                setattr(producto, campo, data[campo])
+                valor = data[campo]
+                if campo == 'codigo_barras':
+                    valor = valor.strip() if isinstance(valor, str) and valor.strip() else None
+                setattr(producto, campo, valor)
 
         producto.precio_final = producto.calcular_precio_final()
         db.session.commit()
@@ -122,7 +126,8 @@ class ProductoService:
             q = q.filter(or_(
                 Producto.nombre.ilike(f"%{query}%"),
                 Producto.cod_interno.ilike(f"%{query}%"),
-                Producto.cod_proveedor.ilike(f"%{query}%")
+                Producto.cod_proveedor.ilike(f"%{query}%"),
+                Producto.codigo_barras.ilike(f"%{query}%")
             ))
 
             # Detecta si es búsqueda de código
@@ -131,6 +136,7 @@ class ProductoService:
                 # Exact match primero, luego parciales
                 prioridad = case(
                     (Producto.cod_interno.ilike(query), 0),
+                    (Producto.codigo_barras.ilike(query), 0),
                     (Producto.cod_proveedor.ilike(query), 0),
                     else_=1
                 )
