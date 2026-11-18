@@ -2,6 +2,7 @@ import base64
 import io
 import json
 
+import qrcode
 import requests
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, HRFlowable
@@ -452,3 +453,96 @@ def generar_pdf_factura(factura):
     pdf = buffer.getvalue()
     buffer.close()
     return pdf
+
+
+def generar_qr_png(factura, tamano_px=300):
+    """
+    PNG del QR AFIP de la factura, para el ticket térmico (no puede embeber
+    un PDF). Se genera con 'qrcode' + Pillow en vez del renderPM de reportlab
+    porque ese backend necesita una extensión nativa (_rl_renderPM / cairo)
+    que no siempre está disponible.
+    """
+    try:
+        empresa = EmpresaFiscalService.get_empresa_activa()
+    except ValueError:
+        empresa = None
+
+    url = construir_url_qr_afip(factura, empresa)
+
+    qr = qrcode.QRCode(border=1)
+    qr.add_data(url)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white").convert("RGB")
+    img = img.resize((tamano_px, tamano_px))
+
+    buffer = io.BytesIO()
+    img.save(buffer, format="PNG")
+    png = buffer.getvalue()
+    buffer.close()
+    return png
+
+
+def construir_datos_ticket(factura):
+    """
+    Datos de una Factura para el ticket térmico (80mm) de 'Nueva venta': un
+    subconjunto de generar_pdf_factura pensado para consumirse como JSON
+    desde el frontend, en vez de como PDF A4.
+    """
+    try:
+        empresa = EmpresaFiscalService.get_empresa_activa()
+    except ValueError:
+        empresa = None
+
+    cliente = factura.cliente
+    tipo = factura.tipo_comprobante
+
+    pv_num = factura.punto_venta_emitido or (
+        factura.punto_venta.numero if factura.punto_venta else None
+    )
+    fecha = factura.fecha_emision or (
+        factura.fecha_creacion.date() if factura.fecha_creacion else None
+    )
+
+    if cliente and cliente.condicion_iva:
+        cond_iva_txt = cliente.condicion_iva.descripcion
+    else:
+        cond_iva_txt = COND_IVA_RECEPTOR_LABEL.get(
+            factura.receptor_condicion_iva or 5, "Consumidor Final"
+        )
+
+    return {
+        "id": factura.id,
+        "numero": formatear_numero(pv_num, factura.arca_numero_cbte),
+        "tipo_letra": tipo.letra if tipo else None,
+        "tipo_descripcion": (tipo.descripcion if tipo else "Comprobante").upper(),
+        "fecha_emision": fecha.isoformat() if fecha else None,
+        "cae": factura.arca_cae,
+        "cae_vto": factura.arca_cae_vto.isoformat() if factura.arca_cae_vto else None,
+        "receptor_nombre": factura.receptor_display(),
+        "receptor_doc_tipo_texto": _tipo_doc_texto(factura),
+        "receptor_doc_nro_texto": _numero_doc_texto(factura),
+        "condicion_iva_receptor": cond_iva_txt,
+        "condicion_venta": _condicion_venta(factura),
+        "total": float(factura.total),
+        "tiene_qr": bool(factura.arca_cae),
+        "items": [
+            {
+                "cod_interno": item.producto.cod_interno if item.producto else None,
+                "descripcion": item.descripcion,
+                "cantidad": float(item.cantidad),
+                "precio_unitario": float(item.precio_unitario),
+                "subtotal": float(item.subtotal),
+            }
+            for item in factura.items
+        ],
+        "empresa": {
+            "razon_social": empresa.razon_social if empresa else None,
+            "nombre_fantasia": empresa.nombre_fantasia if empresa else None,
+            "cuit": _fmt_cuit(empresa.cuit) if empresa else None,
+            "condicion_iva": empresa.condicion_iva.descripcion if empresa and empresa.condicion_iva else None,
+            "domicilio": (empresa.domicilio if empresa else None) or (
+                factura.punto_venta.direccion if factura.punto_venta else None
+            ),
+            "ingresos_brutos": empresa.ingresos_brutos if empresa else None,
+        },
+    }

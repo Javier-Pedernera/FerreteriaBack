@@ -4,7 +4,7 @@ from app.models.empresa_fiscal_config import EmpresaFiscalConfig
 from app.services.arca_service import ArcaService, TLSAdapter
 from app.services.facturacion_service import FacturacionService
 from app.models.factura import Factura
-from app.services.pdf_service import generar_pdf_factura
+from app.services.pdf_service import generar_pdf_factura, generar_qr_png, construir_datos_ticket
 from flask import Response, current_app
 
 facturacion_api = Blueprint('facturacion_api', __name__)
@@ -221,6 +221,23 @@ def descargar_pdf(id):
         }
     )
     
+@facturacion_api.route("/facturas/<int:id>/ticket", methods=["GET"])
+def obtener_datos_ticket(id):
+    """Datos de la factura para el ticket térmico de 80mm (preview + impresión)."""
+    factura = Factura.query.get_or_404(id)
+    return jsonify(construir_datos_ticket(factura)), 200
+
+
+@facturacion_api.route("/facturas/<int:id>/qr.png", methods=["GET"])
+def obtener_qr_png(id):
+    factura = Factura.query.get_or_404(id)
+    if not factura.arca_cae:
+        return jsonify({"message": "La factura no tiene CAE todavía"}), 400
+
+    png = generar_qr_png(factura)
+    return Response(png, mimetype="image/png")
+
+
 @facturacion_api.route("/arca/puntos-venta-monotributo", methods=["GET"])
 def listar_puntos_venta_monotributo():
     try:
