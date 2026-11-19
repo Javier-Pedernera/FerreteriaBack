@@ -66,6 +66,8 @@ def import_products_from_excel(plantilla_id, cotizacion_dolar, fecha_lista):
 
     col_codigo = plantilla.nombre_columna_codigo
     dtype = {col_codigo: str}
+    if plantilla.nombre_columna_codigo_barras:
+        dtype[plantilla.nombre_columna_codigo_barras] = str
 
     try:
         engine = 'xlrd' if extension == 'xls' else 'openpyxl'
@@ -214,6 +216,11 @@ def import_products_from_excel(plantilla_id, cotizacion_dolar, fecha_lista):
                 val = row.get(plantilla.nombre_columna_codigo_barras)
                 if val and str(val).strip().lower() != "nan":
                     codigo_barras_candidato = str(val).strip()
+                    # Si pandas lo leyo como numero (ej. "77917188.0" en vez
+                    # de "77917188"), nos quedamos con la parte entera.
+                    if codigo_barras_candidato.endswith('.0') and \
+                            codigo_barras_candidato[:-2].isdigit():
+                        codigo_barras_candidato = codigo_barras_candidato[:-2]
                     # codigo_barras es unico: si otro producto ya lo tiene
                     # cargado, no lo pisamos (evita romper el import entero
                     # por un choque de codigos en la lista del proveedor).
