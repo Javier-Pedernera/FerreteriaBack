@@ -17,6 +17,7 @@ def create_import_template(data):
         proveedor_id=data['proveedor_id'],
         nombre_archivo_excel=data['nombre_archivo_excel'],
         nombre_columna_codigo=data['nombre_columna_codigo'],
+        nombre_columna_codigo_barras=data.get('nombre_columna_codigo_barras'),
         nombre_columna_precio=data['nombre_columna_precio'],
         nombre_columna_nombre=data.get('nombre_columna_nombre'),
         nombre_columna_precio_sugerido=data.get('nombre_columna_precio_sugerido'),
@@ -207,6 +208,28 @@ def import_products_from_excel(plantilla_id, cotizacion_dolar, fecha_lista):
                     porcentaje_ganancia_personalizado = str(val).strip().lower() in ["1", "si", "sí", "true"]
                     actualizar_pg_personalizado = True
 
+            codigo_barras = None
+            actualizar_codigo_barras = False
+            if plantilla.nombre_columna_codigo_barras in df.columns:
+                val = row.get(plantilla.nombre_columna_codigo_barras)
+                if val and str(val).strip().lower() != "nan":
+                    codigo_barras_candidato = str(val).strip()
+                    # codigo_barras es unico: si otro producto ya lo tiene
+                    # cargado, no lo pisamos (evita romper el import entero
+                    # por un choque de codigos en la lista del proveedor).
+                    duplicado = Producto.query.filter(
+                        Producto.codigo_barras == codigo_barras_candidato
+                    ).first()
+                    if duplicado and duplicado.cod_interno != f"{codigo_proveedor}-{codigo_str}":
+                        errores.append(
+                            f"Fila {index + plantilla.fila_inicio}: código de barras "
+                            f"'{codigo_barras_candidato}' ya pertenece a '{duplicado.nombre}' "
+                            f"({duplicado.cod_interno}), no se asignó."
+                        )
+                    else:
+                        codigo_barras = codigo_barras_candidato
+                        actualizar_codigo_barras = True
+
             producto_existente = Producto.query.filter_by(
                 cod_interno=f"{codigo_proveedor}-{codigo_str}"
             ).first()
@@ -240,6 +263,8 @@ def import_products_from_excel(plantilla_id, cotizacion_dolar, fecha_lista):
                     producto_existente.porcentaje_ganancia = porcentaje_ganancia
                 if actualizar_pg_personalizado:
                     producto_existente.porcentaje_ganancia_personalizado = porcentaje_ganancia_personalizado
+                if actualizar_codigo_barras:
+                    producto_existente.codigo_barras = codigo_barras
 
                 if status_out_of_stock:
                     producto_existente.status_id = status_out_of_stock.id
@@ -259,7 +284,8 @@ def import_products_from_excel(plantilla_id, cotizacion_dolar, fecha_lista):
                     proveedor_id=proveedor.id,
                     status_id=status_out_of_stock.id if status_out_of_stock else None,
                     porcentaje_ganancia=porcentaje_ganancia if actualizar_pg else proveedor.porcentaje_ganancia,
-                    porcentaje_ganancia_personalizado=porcentaje_ganancia_personalizado if actualizar_pg_personalizado else False
+                    porcentaje_ganancia_personalizado=porcentaje_ganancia_personalizado if actualizar_pg_personalizado else False,
+                    codigo_barras=codigo_barras if actualizar_codigo_barras else None,
                 )
                 db.session.add(producto)
                 db.session.flush()

@@ -8,6 +8,7 @@ class PlantillaImportacion(db.Model):
     proveedor_id = db.Column(db.Integer, db.ForeignKey('proveedores.id'), nullable=False, unique=True)
     nombre_archivo_excel = db.Column(db.String(200), nullable=False)
     nombre_columna_codigo = db.Column(db.String(100), nullable=False)
+    nombre_columna_codigo_barras = db.Column(db.String(100), nullable=True)
     nombre_columna_precio = db.Column(db.String(100), nullable=False)
     nombre_columna_precio_sugerido = db.Column(db.String(100), nullable=True)
     nombre_columna_nombre = db.Column(db.String(100), nullable=True)
@@ -39,6 +40,7 @@ class PlantillaImportacion(db.Model):
             'proveedor_nombre': self.proveedor.nombre if self.proveedor else None,
             'nombre_archivo_excel': self.nombre_archivo_excel,
             'nombre_columna_codigo': self.nombre_columna_codigo,
+            'nombre_columna_codigo_barras': self.nombre_columna_codigo_barras,
             'nombre_columna_precio': self.nombre_columna_precio,
             'nombre_columna_precio_sugerido': self.nombre_columna_precio_sugerido,
             'nombre_columna_nombre': self.nombre_columna_nombre,
