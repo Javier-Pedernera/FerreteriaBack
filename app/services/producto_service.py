@@ -81,6 +81,19 @@ class ProductoService:
         if 'cod_interno' in data and data['cod_interno'] != producto.cod_interno:
             raise ValueError("El código interno no se puede modificar.")
 
+        if 'codigo_barras' in data and data['codigo_barras']:
+            codigo_barras_nuevo = data['codigo_barras'].strip() if isinstance(data['codigo_barras'], str) else data['codigo_barras']
+            if codigo_barras_nuevo:
+                duplicado = Producto.query.filter(
+                    Producto.codigo_barras == codigo_barras_nuevo,
+                    Producto.id != producto.id
+                ).first()
+                if duplicado:
+                    raise ValueError(
+                        f"El código de barras '{codigo_barras_nuevo}' ya pertenece a "
+                        f"'{duplicado.nombre}' ({duplicado.cod_interno})."
+                    )
+
         campos_actualizables = ['cod_proveedor', 'nombre', 'nombre_corto', 'descripcion',
                                 'precio_ars', 'precio_usd', 'precio_sugerido', 'porcentaje_ganancia', 'disponibles',
                                 'proveedor_id', 'categoria_id', 'status_id', 'unidad_medida_id',
