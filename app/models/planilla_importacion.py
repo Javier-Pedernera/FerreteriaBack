@@ -20,6 +20,7 @@ class PlantillaImportacion(db.Model):
     usa_simbolo_pesos = db.Column(db.Boolean, default=True)
     usa_miles_con_punto = db.Column(db.Boolean, default=True)
     fecha_ultima_lista = db.Column(db.DateTime, nullable=True)
+    fecha_ultimo_archivo = db.Column(db.DateTime, nullable=True)
     fecha_creacion = db.Column(db.DateTime, default=datetime.now(timezone.utc))
     fecha_actualizacion = db.Column(db.DateTime, default=datetime.now(timezone.utc), onupdate=datetime.now(timezone.utc))
     cod_solo_numero = db.Column(db.Boolean, default=False)
@@ -61,7 +62,8 @@ class PlantillaImportacion(db.Model):
             'cod_solo_numero': self.cod_solo_numero,
             'fecha_creacion': self.fecha_creacion.isoformat(),
             'fecha_actualizacion': self.fecha_actualizacion.isoformat(),
-            'fecha_ultima_lista': self.fecha_ultima_lista.isoformat() if self.fecha_ultima_lista else None
+            'fecha_ultima_lista': self.fecha_ultima_lista.isoformat() if self.fecha_ultima_lista else None,
+            'fecha_ultimo_archivo': self.fecha_ultimo_archivo.isoformat() if self.fecha_ultimo_archivo else None
         }
 
     def __repr__(self):

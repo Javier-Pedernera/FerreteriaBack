@@ -115,6 +115,11 @@ def upload_excel():
         # fecha_ultima_lista NO se toca acá: subir el archivo no implica que
         # los datos ya se importaron. Eso lo actualiza import_products_from_excel
         # unicamente si la importación realmente procesó productos.
+        # fecha_ultimo_archivo sí: marca cuándo se subió el archivo en sí.
+        from datetime import datetime
+        from app import db
+        plantilla.fecha_ultimo_archivo = datetime.utcnow()
+        db.session.commit()
 
         return jsonify({'message': f'Archivo {file.filename} subido correctamente.'}), 200
 
