@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, Response
 from app.services.import_template_service import import_products_from_excel
 from app.services.producto_service import ProductoService
 
@@ -53,6 +53,26 @@ def put_producto(id):
     try:
         producto = ProductoService.actualizar(id, data)
         return jsonify(producto.serialize()), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+@producto_api.route('/productos/<int:id>/generar-codigo-barras', methods=['POST'])
+def generar_codigo_barras(id):
+    try:
+        producto = ProductoService.generar_codigo_barras_interno(id)
+        return jsonify(producto.serialize()), 200
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+@producto_api.route('/productos/<int:id>/codigo-barras.png', methods=['GET'])
+def obtener_imagen_codigo_barras(id):
+    try:
+        png = ProductoService.generar_imagen_codigo_barras(id)
+        return Response(png, mimetype='image/png')
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
     except Exception as e:
         return jsonify({'error': str(e)}), 400
 

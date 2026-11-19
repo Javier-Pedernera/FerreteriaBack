@@ -63,6 +63,7 @@ pydyf==0.12.1
 Pygments==2.19.1
 PyJWT==2.10.1
 pyphen==0.17.2
+python-barcode==0.16.1
 python-dateutil==2.9.0.post0
 python-dotenv==1.0.1
 pytz==2025.2

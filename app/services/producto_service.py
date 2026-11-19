@@ -1,8 +1,19 @@
+import io
+
+import barcode
+from barcode.writer import ImageWriter
+
 from app import db
 from app.models.producto import Producto
 from sqlalchemy import case, or_
 from app.models.proveedor import Proveedor
 from app.utils.cloudinary_service import CloudinaryService
+
+# Prefijo GS1 reservado para uso interno/circulacion restringida (20-29):
+# nunca va a chocar con el codigo real de fabrica de un producto, porque
+# esos prefijos estan excluidos a proposito del espacio de codigos
+# asignados a empresas por GS1.
+PREFIJO_CODIGO_INTERNO = "20"
 
 class ProductoService:
 
@@ -184,3 +195,66 @@ class ProductoService:
         if not producto:
             raise ValueError(f"Producto con id {product_id} no encontrado")
         return producto
+
+    @staticmethod
+    def generar_codigo_barras_interno(producto_id):
+        """
+        Genera y asigna un EAN-13 propio para un producto que no tiene
+        codigo de barras de fabrica. Se arma con el prefijo interno GS1
+        (20) + el id del producto, y la libreria calcula el digito
+        verificador. Determinista: el mismo producto siempre genera el
+        mismo codigo, asi que no hace falta llevar un contador aparte.
+        """
+        producto = Producto.query.get_or_404(producto_id)
+
+        if producto.codigo_barras:
+            raise ValueError(
+                f"El producto ya tiene un código de barras asignado ({producto.codigo_barras})."
+            )
+
+        base_12_digitos = f"{PREFIJO_CODIGO_INTERNO}{producto.id:010d}"
+        ean = barcode.get('ean13', base_12_digitos, writer=ImageWriter())
+        codigo_generado = ean.get_fullcode()
+
+        duplicado = Producto.query.filter(
+            Producto.codigo_barras == codigo_generado,
+            Producto.id != producto.id
+        ).first()
+        if duplicado:
+            # No deberia pasar nunca (el prefijo+id es unico por diseño),
+            # pero si pasa no queremos pisar el de otro producto.
+            raise ValueError(
+                f"El código generado ya está en uso por '{duplicado.nombre}'. "
+                "Asignalo manualmente."
+            )
+
+        producto.codigo_barras = codigo_generado
+        db.session.commit()
+        return producto
+
+    @staticmethod
+    def generar_imagen_codigo_barras(producto_id):
+        """PNG del codigo de barras EAN-13 del producto (el que tenga, generado o real)."""
+        producto = Producto.query.get_or_404(producto_id)
+        if not producto.codigo_barras:
+            raise ValueError("El producto no tiene código de barras cargado.")
+
+        try:
+            # Acepta tanto 12 digitos (calcula el verificador) como 13
+            # (lo recalcula y lo corrige si hiciera falta).
+            ean = barcode.get('ean13', producto.codigo_barras, writer=ImageWriter())
+        except Exception:
+            raise ValueError(
+                "El código de barras de este producto no tiene formato EAN-13 "
+                "(debe ser numérico, de 12 o 13 dígitos) y no se puede imprimir como etiqueta."
+            )
+        buffer = io.BytesIO()
+        ean.write(buffer, options={
+            'write_text': True,
+            'module_height': 12.0,
+            'font_size': 9,
+            'quiet_zone': 2.0,
+        })
+        png = buffer.getvalue()
+        buffer.close()
+        return png
