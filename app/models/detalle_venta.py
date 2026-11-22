@@ -21,6 +21,7 @@ class DetalleVenta(db.Model):
         "producto": getattr(producto, "nombre", None),
         "cod_interno": getattr(producto, "cod_interno", None),
         "codigo_barras": getattr(producto, "codigo_barras", None),
+        "es_fraccionable": getattr(producto, "es_fraccionable", False),
         "precio_costo": str(self.precio_costo),
         
         "presentacion_cantidad": getattr(producto, "presentacion_cantidad", None),
